@@ -1,0 +1,855 @@
+<!doctype html>
+<html lang="bg">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Дневник проверки на резервации v9</title>
+  <style>
+    :root{
+      --bg:#f3f6fb;
+      --surface:#ffffff;
+      --surface-soft:#f8fafc;
+      --text:#142033;
+      --muted:#64748b;
+      --line:#dbe3ef;
+      --accent:#2156d9;
+      --accent-soft:#eaf0ff;
+      --accent-dark:#173c99;
+      --ok:#087443;
+      --ok-soft:#e8f7ef;
+      --diff:#b42318;
+      --diff-soft:#fff0ed;
+      --empty:#eef2f7;
+      --empty-text:#6b7280;
+      --warning:#b54708;
+      --warning-soft:#fff6e5;
+      --shadow:0 18px 45px rgba(20,32,51,.09);
+      --shadow-soft:0 8px 22px rgba(20,32,51,.07);
+      --radius:22px;
+      --radius-sm:14px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      color:var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(33,86,217,.14), transparent 34%),
+        linear-gradient(180deg,#f7f9fd 0%,var(--bg) 100%);
+    }
+    button,input,textarea,select{font:inherit}
+    button{cursor:pointer}
+    .app{max-width:1440px;margin:0 auto;padding:24px}
+    .topbar{
+      display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:18px;
+      padding:18px 20px;border:1px solid rgba(219,227,239,.85);border-radius:26px;background:rgba(255,255,255,.82);
+      box-shadow:var(--shadow-soft);backdrop-filter:blur(12px)
+    }
+    .brand{display:flex;align-items:center;gap:14px;min-width:0}
+    .brand-icon{width:44px;height:44px;border-radius:15px;background:linear-gradient(135deg,var(--accent),#6b8cff);display:grid;place-items:center;color:#fff;font-weight:900;box-shadow:0 12px 28px rgba(33,86,217,.25)}
+    .brand h1{font-size:22px;line-height:1.1;margin:0;letter-spacing:-.02em}
+    .brand p{margin:5px 0 0;color:var(--muted);font-size:13px}
+    .top-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+    .btn{border:0;border-radius:14px;padding:11px 14px;background:var(--surface-soft);color:var(--text);font-weight:750;border:1px solid transparent;display:inline-flex;align-items:center;gap:8px;transition:.18s ease}
+    .btn:hover{transform:translateY(-1px);box-shadow:var(--shadow-soft)}
+    .btn.primary{background:var(--accent);color:#fff}
+    .btn.ghost{background:#fff;border-color:var(--line)}
+    .btn.danger{background:var(--diff-soft);color:var(--diff);border-color:#ffd0c9}
+    .btn.small{padding:8px 11px;border-radius:12px;font-size:13px}
+    .new-shell{margin-bottom:18px}
+    details.new-entry{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-soft);overflow:hidden}
+    details.new-entry summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 20px;font-weight:850;letter-spacing:-.01em}
+    details.new-entry summary::-webkit-details-marker{display:none}
+    .summary-title{display:flex;align-items:center;gap:10px}
+    .summary-badge{background:var(--accent-soft);color:var(--accent-dark);border-radius:999px;padding:6px 10px;font-size:12px;font-weight:850}
+    .chev{transition:.18s ease;color:var(--muted)}
+    details[open] .chev{transform:rotate(180deg)}
+    .new-body{border-top:1px solid var(--line);padding:20px;background:linear-gradient(180deg,#fff 0%,#fbfcff 100%)}
+    .form-grid{display:grid;grid-template-columns:1.1fr 1.2fr 1fr;gap:18px;align-items:start}
+    .form-section{background:var(--surface-soft);border:1px solid var(--line);border-radius:18px;padding:16px}
+    .form-section h3{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 14px}
+    .field{margin-bottom:14px}
+    .field:last-child{margin-bottom:0}
+    .label{display:block;font-weight:800;margin-bottom:8px;font-size:13px;color:#344054}
+    .date-button,.period-button,.select-like{width:100%;min-height:46px;justify-content:space-between;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px;text-align:left;color:var(--text);font-weight:800}
+    .date-button span,.period-button span{color:var(--muted);font-weight:700}
+    .button-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .button-grid.channels{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .choice{border:1px solid var(--line);background:#fff;color:var(--text);border-radius:14px;min-height:44px;padding:10px 12px;font-weight:800;transition:.16s ease;text-align:center}
+    .choice:hover{border-color:#b7c7e6;box-shadow:var(--shadow-soft)}
+    .choice.active{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 10px 20px rgba(33,86,217,.20)}
+    .choice.result-ok.active{background:var(--ok);border-color:var(--ok)}
+    .choice.result-diff.active{background:var(--diff);border-color:var(--diff)}
+    textarea{width:100%;min-height:126px;resize:vertical;border:1px solid var(--line);border-radius:16px;padding:13px 14px;background:#fff;color:var(--text);outline:none;line-height:1.35}
+    textarea:focus,.date-button:focus,.period-button:focus,select:focus{border-color:#91a9e8;box-shadow:0 0 0 4px rgba(33,86,217,.10)}
+    select{width:100%;height:46px;border:1px solid var(--line);border-radius:14px;background:#fff;color:var(--text);padding:0 12px;font-weight:800;outline:none}
+    .submit-row{display:flex;align-items:center;gap:10px;margin-top:14px}
+    .hint{font-size:12px;color:var(--muted);line-height:1.35;margin-top:8px}
+    .main-grid{display:grid;grid-template-columns:300px 1fr;gap:18px;align-items:start}
+    .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-soft);overflow:hidden}
+    .panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:18px 18px;border-bottom:1px solid var(--line);background:#fff}
+    .panel-head h2{font-size:16px;margin:0;letter-spacing:-.01em}
+    .panel-sub{font-size:12px;color:var(--muted);margin-top:4px}
+    .checks-list{padding:12px 12px 18px;max-height:680px;overflow:auto}
+    .month-group{margin-bottom:16px}
+    .month-title{font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:8px 8px}
+    .date-item{width:100%;border:0;background:transparent;border-radius:14px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;color:var(--text);font-weight:850;transition:.14s ease}
+    .date-item:hover{background:var(--surface-soft)}
+    .date-item.active{background:var(--accent);color:#fff;box-shadow:0 10px 20px rgba(33,86,217,.18)}
+    .date-count{font-size:12px;color:var(--muted);background:var(--empty);border-radius:999px;padding:3px 8px;font-weight:900}
+    .date-item.active .date-count{background:rgba(255,255,255,.18);color:#fff}
+    .empty-state{padding:18px;color:var(--muted);font-size:14px;line-height:1.45}
+    .dashboard{padding:18px}
+    .dashboard-top{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+    .selected-date{font-size:28px;font-weight:950;letter-spacing:-.04em}
+    .summary-strip{display:flex;gap:8px;flex-wrap:wrap}
+    .metric{background:var(--surface-soft);border:1px solid var(--line);border-radius:14px;padding:8px 11px;font-weight:850;color:#344054;font-size:13px}
+    .metric.ok{background:var(--ok-soft);color:var(--ok);border-color:#bfe8cf}
+    .metric.diff{background:var(--diff-soft);color:var(--diff);border-color:#ffd0c9}
+    .hotel-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+    .hotel-card{border:1px solid var(--line);background:#fff;border-radius:22px;padding:0;overflow:hidden;box-shadow:0 8px 22px rgba(20,32,51,.055);transition:.17s ease;text-align:left}
+    .hotel-card:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+    .hotel-card .bar{height:6px;background:var(--empty)}
+    .hotel-card.all-ok .bar{background:linear-gradient(90deg,var(--ok),#36b37e)}
+    .hotel-card.has-diff .bar{background:linear-gradient(90deg,var(--diff),#f97316)}
+    .hotel-card.partial .bar{background:linear-gradient(90deg,var(--accent),#7aa2ff)}
+    .hotel-content{padding:16px}
+    .hotel-title{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+    .hotel-title h3{font-size:17px;margin:0;letter-spacing:-.02em}
+    .hotel-pill{font-size:12px;font-weight:900;border-radius:999px;padding:5px 9px;background:var(--empty);color:var(--empty-text);white-space:nowrap}
+    .hotel-pill.ok{background:var(--ok-soft);color:var(--ok)}
+    .hotel-pill.diff{background:var(--diff-soft);color:var(--diff)}
+    .channel-row{display:grid;grid-template-columns:94px 1fr;gap:10px;align-items:center;padding:8px 0;border-top:1px solid #edf1f7}
+    .channel-row:first-of-type{border-top:0}
+    .channel-name{font-weight:900;color:#334155;font-size:13px}
+    .status-chip{justify-self:start;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:900;background:var(--empty);color:var(--empty-text)}
+    .status-chip.ok{background:var(--ok-soft);color:var(--ok)}
+    .status-chip.diff{background:var(--diff-soft);color:var(--diff)}
+    .status-chip.none{background:#f1f5f9;color:#64748b}
+    .modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.46);display:none;align-items:center;justify-content:center;padding:22px;z-index:50}
+    .modal-backdrop.show{display:flex}
+    .modal{width:min(760px,96vw);max-height:88vh;overflow:auto;background:#fff;border-radius:26px;box-shadow:0 30px 90px rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.75)}
+    .modal-header{position:sticky;top:0;background:#fff;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 20px;border-bottom:1px solid var(--line)}
+    .modal-header h2{margin:0;font-size:19px;letter-spacing:-.02em}
+    .modal-body{padding:20px}
+    .icon-btn{border:0;background:var(--surface-soft);border-radius:12px;width:38px;height:38px;font-weight:900;color:var(--muted)}
+    .calendar-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+    .calendar-head strong{font-size:18px;letter-spacing:-.02em}
+    .cal-nav{display:flex;gap:8px}
+    .calendar-grid,.period-month-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+    .dow{font-size:12px;color:var(--muted);font-weight:900;text-align:center;padding:8px 0}
+    .day{border:1px solid transparent;background:var(--surface-soft);border-radius:13px;min-height:42px;font-weight:900;color:var(--text);transition:.12s ease}
+    .day:hover{background:var(--accent-soft);border-color:#c8d6ff}
+    .day.out{opacity:.34}
+    .day.selected,.day.range-start,.day.range-end{background:var(--accent);color:#fff}
+    .day.in-range{background:var(--accent-soft);color:var(--accent-dark);border-color:#d5dfff}
+    .period-calendars{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+    .period-month-title{font-weight:950;text-align:center;margin-bottom:10px;letter-spacing:-.02em}
+    .record-list{display:grid;gap:12px}
+    .record-card{border:1px solid var(--line);border-radius:18px;padding:14px;background:var(--surface-soft)}
+    .record-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+    .record-title{font-weight:950}
+    .record-meta{font-size:12px;color:var(--muted);font-weight:800}
+    .record-text{white-space:pre-wrap;line-height:1.45;color:#334155;margin-top:8px}
+    .settings-grid{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;margin-bottom:16px}
+    .settings-grid input{height:46px;border:1px solid var(--line);border-radius:14px;padding:0 12px;outline:none;font-weight:800}
+    .employee-list{display:flex;flex-wrap:wrap;gap:8px}
+    .employee-token{display:inline-flex;align-items:center;gap:8px;background:var(--accent-soft);color:var(--accent-dark);font-weight:900;border-radius:999px;padding:8px 10px}
+    .employee-token button{border:0;background:rgba(33,86,217,.12);border-radius:999px;color:var(--accent-dark);font-weight:950;width:22px;height:22px}
+    .toast{position:fixed;right:22px;bottom:22px;background:#111827;color:#fff;padding:13px 15px;border-radius:14px;box-shadow:var(--shadow);display:none;z-index:60;font-weight:850}
+    .toast.show{display:block;animation:fadeToast 2.2s ease forwards}
+
+    .sync-status{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:999px;background:#fff;padding:9px 12px;font-weight:850;color:var(--muted);font-size:13px}
+    .sync-status.online{background:var(--ok-soft);border-color:#bfe8cf;color:var(--ok)}
+    .sync-status.saving{background:var(--warning-soft);border-color:#ffd999;color:var(--warning)}
+    .sync-status.error{background:var(--diff-soft);border-color:#ffd0c9;color:var(--diff)}
+    .wide-input{width:100%;min-height:46px;border:1px solid var(--line);border-radius:14px;padding:10px 12px;outline:none;font-weight:750;background:#fff;color:var(--text)}
+    .wide-input:focus{border-color:#91a9e8;box-shadow:0 0 0 4px rgba(33,86,217,.10)}
+    .settings-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+    .drive-help{background:var(--accent-soft);border:1px solid #d5dfff;color:var(--accent-dark);border-radius:14px;padding:12px 14px;font-size:13px;line-height:1.45;margin-top:12px;font-weight:700}
+    @keyframes fadeToast{0%{opacity:0;transform:translateY(10px)}15%,80%{opacity:1;transform:none}100%{opacity:0;transform:translateY(10px)}}
+    @media(max-width:1100px){.form-grid{grid-template-columns:1fr}.main-grid{grid-template-columns:1fr}.checks-list{max-height:none}.hotel-grid{grid-template-columns:1fr}}
+    @media(max-width:720px){.app{padding:12px}.topbar{align-items:flex-start;flex-direction:column;border-radius:20px}.top-actions{width:100%;justify-content:stretch}.top-actions .btn{flex:1;justify-content:center}.new-body,.dashboard,.modal-body{padding:14px}.button-grid,.button-grid.channels{grid-template-columns:1fr}.selected-date{font-size:24px}.period-calendars{grid-template-columns:1fr}.modal{border-radius:20px}.channel-row{grid-template-columns:1fr;gap:5px}.hotel-title{align-items:flex-start;flex-direction:column}}
+  </style>
+</head>
+<body>
+<script id="app-data" type="application/json">{
+  "employees": [],
+  "channels": [
+    "Booking",
+    "Quendoo",
+    "TO"
+  ],
+  "records": []
+}</script>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-icon">✓</div>
+      <div>
+        <h1>Дневник проверки</h1>
+        <p>Резервационен отдел · хотели, канали и установени разлики</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <span class="sync-status" id="syncStatus">☁ Локално</span>
+      <button class="btn ghost" id="settingsBtn">⚙ Настройки</button>
+    </div>
+  </header>
+
+  <section class="new-shell">
+    <details class="new-entry" open>
+      <summary>
+        <span class="summary-title">Нов запис <span class="summary-badge" id="draftBadge">готов за въвеждане</span></span>
+        <span class="chev">⌄</span>
+      </summary>
+      <div class="new-body">
+        <div class="form-grid">
+          <div class="form-section">
+            <h3>Дата и период</h3>
+            <div class="field">
+              <label class="label">Дата на проверката</label>
+              <button class="date-button" id="checkDateBtn" type="button"></button>
+            </div>
+            <div class="field">
+              <label class="label">Искан период</label>
+              <button class="period-button" id="periodBtn" type="button"></button>
+              <div class="hint">Избира се първа и последна дата от един общ диапазон.</div>
+            </div>
+            <div class="field">
+              <label class="label">Служител</label>
+              <select id="employeeSelect"></select>
+            </div>
+          </div>
+          <div class="form-section">
+            <h3>Хотел и канал</h3>
+            <div class="field">
+              <label class="label">Хотел</label>
+              <div class="button-grid" id="hotelChoices"></div>
+            </div>
+            <div class="field">
+              <label class="label">Канал</label>
+              <div class="button-grid channels" id="channelChoices"></div>
+            </div>
+          </div>
+          <div class="form-section">
+            <h3>Резултат</h3>
+            <div class="field">
+              <label class="label">Резултат</label>
+              <div class="button-grid">
+                <button class="choice result-ok" data-result="ok" type="button">✅ ОК / няма разлики</button>
+                <button class="choice result-diff" data-result="diff" type="button">⚠️ Има разлики</button>
+              </div>
+            </div>
+            <div class="field">
+              <label class="label">Какво е установено</label>
+              <textarea id="findingInput" placeholder="Попълва се задължително само при „Има разлики“. При ОК може да остане празно."></textarea>
+            </div>
+            <div class="submit-row">
+              <button class="btn primary" id="addRecordBtn" type="button">Запиши проверката</button>
+              <button class="btn ghost" id="resetDraftBtn" type="button">Изчисти</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <main class="main-grid">
+    <aside class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Проверки</h2>
+          <div class="panel-sub">по месеци и дати</div>
+        </div>
+      </div>
+      <div class="checks-list" id="checksList"></div>
+    </aside>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Проверки за избраната дата</h2>
+          <div class="panel-sub">натисни хотел, за да видиш записите</div>
+        </div>
+        <button class="btn small ghost" id="jumpTodayBtn" type="button">Днес</button>
+      </div>
+      <div class="dashboard">
+        <div class="dashboard-top">
+          <div class="selected-date" id="selectedDateTitle"></div>
+          <div class="summary-strip" id="summaryStrip"></div>
+        </div>
+        <div class="hotel-grid" id="hotelGrid"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="modal-backdrop" id="dateModal">
+  <div class="modal">
+    <div class="modal-header"><h2>Дата на проверката</h2><button class="icon-btn" data-close="dateModal">×</button></div>
+    <div class="modal-body">
+      <div class="calendar-head">
+        <button class="btn small ghost" id="prevMonthBtn">‹</button>
+        <strong id="singleMonthTitle"></strong>
+        <button class="btn small ghost" id="nextMonthBtn">›</button>
+      </div>
+      <div class="calendar-grid" id="singleCalendar"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="periodModal">
+  <div class="modal">
+    <div class="modal-header"><h2>Искан период</h2><button class="icon-btn" data-close="periodModal">×</button></div>
+    <div class="modal-body">
+      <div class="calendar-head">
+        <button class="btn small ghost" id="periodPrevBtn">‹</button>
+        <strong id="periodTitle">Избери начало и край</strong>
+        <button class="btn small ghost" id="periodNextBtn">›</button>
+      </div>
+      <div class="period-calendars" id="periodCalendars"></div>
+      <div class="submit-row">
+        <button class="btn primary" id="confirmPeriodBtn">Готово</button>
+        <button class="btn ghost" id="clearPeriodBtn">Изчисти периода</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="hotelModal">
+  <div class="modal">
+    <div class="modal-header"><h2 id="hotelModalTitle"></h2><button class="icon-btn" data-close="hotelModal">×</button></div>
+    <div class="modal-body" id="hotelModalBody"></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="settingsModal">
+  <div class="modal">
+    <div class="modal-header"><h2>Настройки</h2><button class="icon-btn" data-close="settingsModal">×</button></div>
+    <div class="modal-body">
+      <div class="form-section">
+        <h3>Google Drive съхранение</h3>
+        <label class="label">Google Apps Script URL</label>
+        <input id="googleScriptUrlInput" class="wide-input" placeholder="Постави Web App URL, който завършва на /exec">
+        <div class="settings-actions">
+          <button class="btn primary" id="saveGoogleUrlBtn" type="button">Запази URL</button>
+          <button class="btn ghost" id="loadGoogleBtn" type="button">Зареди от Google Drive</button>
+          <button class="btn ghost" id="saveGoogleBtn" type="button">Запази към Google Drive</button>
+        </div>
+        <div class="drive-help">След като поставиш URL, всички промени се записват автоматично и локално, и към Google Drive. Всеки служител трябва да постави същия URL веднъж на своя браузър.</div>
+      </div>
+      <div class="form-section">
+        <h3>Служители</h3>
+        <div class="settings-grid">
+          <div>
+            <label class="label">Добави служител</label>
+            <input id="employeeInput" placeholder="Име на служител">
+          </div>
+          <button class="btn primary" id="addEmployeeBtn" type="button">Добави</button>
+        </div>
+        <div class="employee-list" id="employeeList"></div>
+      </div>
+      <div class="form-section" style="margin-top:16px">
+        <h3>Канали</h3>
+        <div class="settings-grid">
+          <div>
+            <label class="label">Добави канал</label>
+            <input id="channelInput" placeholder="Име на канал">
+          </div>
+          <button class="btn primary" id="addChannelBtn" type="button">Добави</button>
+        </div>
+        <div class="employee-list" id="channelList"></div>
+        <div class="hint">При преименуване на канал името се обновява и в старите записи.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  const HOTELS = ['Алгара Бийч','Гранд Виктория','Свети Мина','Вила Азура','Малина Резидънс'];
+  const MONTHS = ['Януари','Февруари','Март','Април','Май','Юни','Юли','Август','Септември','Октомври','Ноември','Декември'];
+  const DOW = ['П','В','С','Ч','П','С','Н'];
+  const dataEl = document.getElementById('app-data');
+  const STORAGE_KEY = 'reservation_checks_github_v9_data';
+  const OLD_STORAGE_KEYS = ['reservation_checks_github_v8_data'];
+  const SCRIPT_URL_KEY = 'reservation_checks_google_script_url';
+  let googleScriptUrl = localStorage.getItem(SCRIPT_URL_KEY) || '';
+  let remoteSaveTimer = null;
+  let loadingRemote = false;
+  let data = safeData();
+  if (!data.channels.length) data.channels = ['Booking','Quendoo','TO'];
+  let selectedDate = todayBg();
+  if (data.records.length) selectedDate = latestRecordDate();
+  let draft = {
+    checkDate: selectedDate,
+    periodStart: '',
+    periodEnd: '',
+    hotel: HOTELS[0],
+    channel: data.channels[0] || '' || '',
+    result: 'ok',
+    finding: '',
+    employee: data.employees[0] || ''
+  };
+  let singleCalendarMonth = startOfMonth(parseBgDate(draft.checkDate));
+  let periodBaseMonth = startOfMonth(parseBgDate(draft.checkDate));
+  let tempPeriodStart = null;
+  let tempPeriodEnd = null;
+
+  const els = {
+    checkDateBtn: document.getElementById('checkDateBtn'),
+    periodBtn: document.getElementById('periodBtn'),
+    employeeSelect: document.getElementById('employeeSelect'),
+    hotelChoices: document.getElementById('hotelChoices'),
+    channelChoices: document.getElementById('channelChoices'),
+    findingInput: document.getElementById('findingInput'),
+    addRecordBtn: document.getElementById('addRecordBtn'),
+    resetDraftBtn: document.getElementById('resetDraftBtn'),
+    checksList: document.getElementById('checksList'),
+    selectedDateTitle: document.getElementById('selectedDateTitle'),
+    summaryStrip: document.getElementById('summaryStrip'),
+    hotelGrid: document.getElementById('hotelGrid'),
+    draftBadge: document.getElementById('draftBadge'),
+    singleCalendar: document.getElementById('singleCalendar'),
+    singleMonthTitle: document.getElementById('singleMonthTitle'),
+    periodCalendars: document.getElementById('periodCalendars'),
+    periodTitle: document.getElementById('periodTitle'),
+    hotelModalTitle: document.getElementById('hotelModalTitle'),
+    hotelModalBody: document.getElementById('hotelModalBody'),
+    employeeList: document.getElementById('employeeList'),
+    employeeInput: document.getElementById('employeeInput'),
+    channelList: document.getElementById('channelList'),
+    channelInput: document.getElementById('channelInput'),
+    toast: document.getElementById('toast'),
+    syncStatus: document.getElementById('syncStatus'),
+    googleScriptUrlInput: document.getElementById('googleScriptUrlInput'),
+    saveGoogleUrlBtn: document.getElementById('saveGoogleUrlBtn'),
+    loadGoogleBtn: document.getElementById('loadGoogleBtn'),
+    saveGoogleBtn: document.getElementById('saveGoogleBtn')
+  };
+
+  document.querySelectorAll('[data-close]').forEach(btn => btn.addEventListener('click', () => closeModal(btn.dataset.close)));
+  document.querySelectorAll('.modal-backdrop').forEach(m => m.addEventListener('click', e => { if(e.target === m) closeModal(m.id); }));
+  document.addEventListener('keydown', e => { if(e.key === 'Escape') document.querySelectorAll('.modal-backdrop.show').forEach(m => closeModal(m.id)); });
+
+  document.getElementById('settingsBtn').addEventListener('click', () => { renderSettings(); openModal('settingsModal'); });
+  els.saveGoogleUrlBtn.addEventListener('click', saveGoogleUrl);
+  els.loadGoogleBtn.addEventListener('click', () => loadRemoteData(true));
+  els.saveGoogleBtn.addEventListener('click', () => saveRemoteData(true));
+  document.getElementById('jumpTodayBtn').addEventListener('click', () => { selectedDate = todayBg(); draft.checkDate = selectedDate; singleCalendarMonth = startOfMonth(parseBgDate(selectedDate)); renderAll(); });
+  els.checkDateBtn.addEventListener('click', () => { singleCalendarMonth = startOfMonth(parseBgDate(draft.checkDate)); renderSingleCalendar(); openModal('dateModal'); });
+  els.periodBtn.addEventListener('click', () => { periodBaseMonth = startOfMonth(parseBgDate(draft.checkDate)); tempPeriodStart = draft.periodStart ? parseBgDate(draft.periodStart) : null; tempPeriodEnd = draft.periodEnd ? parseBgDate(draft.periodEnd) : null; renderPeriodCalendars(); openModal('periodModal'); });
+  document.getElementById('prevMonthBtn').addEventListener('click', () => { singleCalendarMonth.setMonth(singleCalendarMonth.getMonth()-1); renderSingleCalendar(); });
+  document.getElementById('nextMonthBtn').addEventListener('click', () => { singleCalendarMonth.setMonth(singleCalendarMonth.getMonth()+1); renderSingleCalendar(); });
+  document.getElementById('periodPrevBtn').addEventListener('click', () => { periodBaseMonth.setMonth(periodBaseMonth.getMonth()-1); renderPeriodCalendars(); });
+  document.getElementById('periodNextBtn').addEventListener('click', () => { periodBaseMonth.setMonth(periodBaseMonth.getMonth()+1); renderPeriodCalendars(); });
+  document.getElementById('confirmPeriodBtn').addEventListener('click', () => {
+    if (!tempPeriodStart || !tempPeriodEnd) { showToast('Избери начало и край на периода.'); return; }
+    if (tempPeriodStart > tempPeriodEnd) [tempPeriodStart,tempPeriodEnd] = [tempPeriodEnd,tempPeriodStart];
+    draft.periodStart = formatBgDate(tempPeriodStart);
+    draft.periodEnd = formatBgDate(tempPeriodEnd);
+    closeModal('periodModal');
+    renderDraft();
+  });
+  document.getElementById('clearPeriodBtn').addEventListener('click', () => { tempPeriodStart = null; tempPeriodEnd = null; renderPeriodCalendars(); });
+  document.getElementById('addEmployeeBtn').addEventListener('click', addEmployee);
+  document.getElementById('addChannelBtn').addEventListener('click', addChannel);
+  els.employeeInput.addEventListener('keydown', e => { if (e.key === 'Enter') addEmployee(); });
+  els.channelInput.addEventListener('keydown', e => { if (e.key === 'Enter') addChannel(); });
+  els.employeeSelect.addEventListener('change', () => { draft.employee = els.employeeSelect.value; renderDraftBadge(); });
+  els.findingInput.addEventListener('input', () => { draft.finding = els.findingInput.value; renderDraftBadge(); });
+  els.addRecordBtn.addEventListener('click', addRecord);
+  els.resetDraftBtn.addEventListener('click', resetDraft);
+
+  renderAll();
+  updateSyncStatus();
+  if (googleScriptUrl) loadRemoteData(false);
+
+  function safeData(){
+    try {
+      const keys = [STORAGE_KEY].concat(OLD_STORAGE_KEYS || []);
+      for (const key of keys) {
+        const saved = localStorage.getItem(key);
+        if (saved) {
+          const parsedSaved = JSON.parse(saved);
+          return normalizeData(parsedSaved);
+        }
+      }
+    } catch(e) {}
+    try {
+      const parsed = JSON.parse(dataEl.textContent || '{}');
+      return normalizeData(parsed);
+    } catch(e) { return {employees:[],channels:[],records:[]}; }
+  }
+  function normalizeData(parsed){
+    return {
+      employees: Array.isArray(parsed.employees) ? parsed.employees : [],
+      channels: Array.isArray(parsed.channels) ? parsed.channels : [],
+      records: Array.isArray(parsed.records) ? parsed.records : []
+    };
+  }
+  function persistData(){
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e) {}
+    if (!loadingRemote && googleScriptUrl) scheduleRemoteSave();
+  }
+  function cleanScriptUrl(){ return String(googleScriptUrl || '').trim(); }
+  function updateSyncStatus(state, message){
+    if (!els.syncStatus) return;
+    els.syncStatus.classList.remove('online','saving','error');
+    if (state) els.syncStatus.classList.add(state);
+    if (message) { els.syncStatus.textContent = message; return; }
+    if (!googleScriptUrl) els.syncStatus.textContent = '☁ Локално';
+    else els.syncStatus.textContent = '☁ Google Drive';
+    if (googleScriptUrl) els.syncStatus.classList.add('online');
+  }
+  function saveGoogleUrl(){
+    const url = els.googleScriptUrlInput.value.trim();
+    googleScriptUrl = url;
+    if (url) localStorage.setItem(SCRIPT_URL_KEY, url); else localStorage.removeItem(SCRIPT_URL_KEY);
+    updateSyncStatus();
+    showToast(url ? 'Google Drive URL е запазен.' : 'Google Drive URL е премахнат.');
+  }
+  function scheduleRemoteSave(){
+    clearTimeout(remoteSaveTimer);
+    remoteSaveTimer = setTimeout(() => saveRemoteData(false), 700);
+  }
+  async function loadRemoteData(showMessage){
+    const url = cleanScriptUrl();
+    if (!url) { showToast('Постави Google Apps Script URL в Настройки.'); return; }
+    loadingRemote = true;
+    updateSyncStatus('saving', '☁ Зареждане...');
+    try {
+      const sep = url.includes('?') ? '&' : '?';
+      const res = await fetch(url + sep + 'action=load&ts=' + Date.now(), { method:'GET', cache:'no-store', redirect:'follow' });
+      const payload = await res.json();
+      if (!payload || payload.ok === false) throw new Error(payload && payload.error ? payload.error : 'Няма валиден отговор от скрипта.');
+      const incoming = payload.data || payload;
+      data = normalizeData(incoming);
+      if (!data.channels.length) data.channels = ['Booking','Quendoo','TO'];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      selectedDate = data.records.length ? latestRecordDate() : todayBg();
+      draft = { checkDate:selectedDate, periodStart:'', periodEnd:'', hotel:HOTELS[0], channel:data.channels[0] || '', result:'ok', finding:'', employee:data.employees[0] || '' };
+      singleCalendarMonth = startOfMonth(parseBgDate(selectedDate));
+      periodBaseMonth = startOfMonth(parseBgDate(selectedDate));
+      renderAll();
+      updateSyncStatus('online', '☁ Google Drive');
+      if (showMessage) showToast('Данните са заредени от Google Drive.');
+    } catch(e) {
+      updateSyncStatus('error', '☁ Грешка');
+      if (showMessage !== false) alert('Не успях да заредя от Google Drive.\n' + (e.message || e));
+    } finally {
+      loadingRemote = false;
+    }
+  }
+  async function saveRemoteData(showMessage){
+    const url = cleanScriptUrl();
+    if (!url) { if (showMessage) showToast('Постави Google Apps Script URL в Настройки.'); return; }
+    updateSyncStatus('saving', '☁ Записване...');
+    try {
+      const payload = { action:'save', data, savedAt:new Date().toISOString() };
+      const res = await fetch(url, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload), redirect:'follow' });
+      const text = await res.text();
+      let reply = {};
+      try { reply = JSON.parse(text); } catch(e) {}
+      if (reply && reply.ok === false) throw new Error(reply.error || 'Грешка при запис.');
+      updateSyncStatus('online', '☁ Google Drive');
+      if (showMessage) showToast('Данните са записани към Google Drive.');
+    } catch(e) {
+      updateSyncStatus('error', '☁ Грешка');
+      if (showMessage !== false) alert('Не успях да запиша към Google Drive.\n' + (e.message || e));
+    }
+  }
+  function pad(n){ return String(n).padStart(2,'0'); }
+  function todayBg(){ return formatBgDate(new Date()); }
+  function formatBgDate(d){ return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`; }
+  function parseBgDate(s){
+    const parts = String(s || '').split('/').map(Number);
+    if (parts.length !== 3 || parts.some(isNaN)) return new Date();
+    return new Date(parts[2], parts[1]-1, parts[0]);
+  }
+  function dayMonth(s){ const d = parseBgDate(s); return `${pad(d.getDate())}.${pad(d.getMonth()+1)}`; }
+  function monthKey(s){ const d = parseBgDate(s); return `${d.getFullYear()}-${pad(d.getMonth()+1)}`; }
+  function monthLabelFromKey(key){ const [y,m] = key.split('-').map(Number); return `${MONTHS[m-1]} ${y}`; }
+  function startOfMonth(d){ return new Date(d.getFullYear(), d.getMonth(), 1); }
+  function sameDay(a,b){ return a && b && a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
+  function dateValue(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
+  function escapeHtml(s){ return String(s || '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch])); }
+  function latestRecordDate(){
+    return data.records.slice().sort((a,b)=>parseBgDate(b.checkDate)-parseBgDate(a.checkDate))[0]?.checkDate || todayBg();
+  }
+  function openModal(id){ document.getElementById(id).classList.add('show'); }
+  function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+  function showToast(msg){ els.toast.textContent = msg; els.toast.classList.remove('show'); void els.toast.offsetWidth; els.toast.classList.add('show'); }
+  function makeId(){ return 'rec-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8); }
+  function getLatestRecord(checkDate, hotel, channel){
+    return data.records
+      .filter(r => r.checkDate === checkDate && r.hotel === hotel && r.channel === channel)
+      .sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))[0] || null;
+  }
+  function recordsForDate(date){ return data.records.filter(r => r.checkDate === date); }
+  function recordsForHotel(date, hotel){ return data.records.filter(r => r.checkDate === date && r.hotel === hotel).sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0)); }
+
+  function renderAll(){ renderDraft(); renderChecks(); renderDashboard(); }
+  function renderDraft(){
+    els.checkDateBtn.innerHTML = `<strong>${escapeHtml(draft.checkDate)}</strong>`;
+    const periodText = draft.periodStart && draft.periodEnd ? `${draft.periodStart} - ${draft.periodEnd}` : 'избери период';
+    els.periodBtn.innerHTML = `<strong>${escapeHtml(periodText)}</strong>`;
+    els.employeeSelect.innerHTML = '';
+    if (!data.employees.length) {
+      const opt = document.createElement('option'); opt.value=''; opt.textContent='Добави служител от Настройки'; els.employeeSelect.appendChild(opt);
+    } else {
+      data.employees.forEach(name => { const opt = document.createElement('option'); opt.value=name; opt.textContent=name; els.employeeSelect.appendChild(opt); });
+      if (!data.employees.includes(draft.employee)) draft.employee = data.employees[0];
+    }
+    els.employeeSelect.value = draft.employee;
+    if (!data.channels.includes(draft.channel)) draft.channel = data.channels[0] || '';
+    els.hotelChoices.innerHTML = HOTELS.map(h => `<button type="button" class="choice ${draft.hotel===h?'active':''}" data-hotel="${escapeHtml(h)}">${escapeHtml(h)}</button>`).join('');
+    els.channelChoices.innerHTML = data.channels.map(c => `<button type="button" class="choice ${draft.channel===c?'active':''}" data-channel="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('');
+    document.querySelectorAll('[data-hotel]').forEach(b => b.addEventListener('click', () => { draft.hotel = b.dataset.hotel; renderDraft(); }));
+    document.querySelectorAll('[data-channel]').forEach(b => b.addEventListener('click', () => { draft.channel = b.dataset.channel; renderDraft(); }));
+    document.querySelectorAll('[data-result]').forEach(b => {
+      b.classList.toggle('active', draft.result === b.dataset.result);
+      b.addEventListener('click', () => { draft.result = b.dataset.result; renderDraft(); });
+    });
+    els.findingInput.value = draft.finding || '';
+    renderDraftBadge();
+  }
+  function renderDraftBadge(){
+    const missing = [];
+    if (!draft.checkDate) missing.push('дата');
+    if (!draft.periodStart || !draft.periodEnd) missing.push('период');
+    if (!draft.hotel) missing.push('хотел');
+    if (!draft.channel) missing.push('канал');
+    if (!draft.employee) missing.push('служител');
+    if (draft.result === 'diff' && !String(draft.finding||'').trim()) missing.push('установено');
+    els.draftBadge.textContent = missing.length ? 'липсва: ' + missing.join(', ') : 'готов за запис';
+  }
+  function renderChecks(){
+    const allDates = Array.from(new Set([...data.records.map(r=>r.checkDate), selectedDate])).sort((a,b)=>parseBgDate(b)-parseBgDate(a));
+    if (!allDates.length) { els.checksList.innerHTML = '<div class="empty-state">Все още няма въведени проверки.</div>'; return; }
+    const grouped = {};
+    allDates.forEach(d => { const k = monthKey(d); if (!grouped[k]) grouped[k]=[]; grouped[k].push(d); });
+    const keys = Object.keys(grouped).sort((a,b)=>b.localeCompare(a));
+    els.checksList.innerHTML = keys.map(k => {
+      const dates = grouped[k].sort((a,b)=>parseBgDate(b)-parseBgDate(a)).map(d => {
+        const cnt = data.records.filter(r=>r.checkDate===d).length;
+        return `<button class="date-item ${d===selectedDate?'active':''}" data-date="${d}"><span>${dayMonth(d)}</span><span class="date-count">${cnt}</span></button>`;
+      }).join('');
+      return `<div class="month-group"><div class="month-title">${monthLabelFromKey(k)}</div>${dates}</div>`;
+    }).join('');
+    els.checksList.querySelectorAll('[data-date]').forEach(btn => btn.addEventListener('click', () => { selectedDate = btn.dataset.date; draft.checkDate = selectedDate; singleCalendarMonth = startOfMonth(parseBgDate(selectedDate)); renderAll(); }));
+  }
+  function renderDashboard(){
+    els.selectedDateTitle.textContent = selectedDate;
+    const dayRecords = recordsForDate(selectedDate);
+    const ok = dayRecords.filter(r=>r.result==='ok').length;
+    const diff = dayRecords.filter(r=>r.result==='diff').length;
+    const totalSlots = HOTELS.length * data.channels.length;
+    const filledSlots = new Set(dayRecords.map(r=>r.hotel+'|'+r.channel)).size;
+    els.summaryStrip.innerHTML = `<span class="metric">${dayRecords.length} записа</span><span class="metric ok">${ok} OK</span><span class="metric diff">${diff} с разлики</span><span class="metric">${totalSlots-filledSlots} без запис</span>`;
+    els.hotelGrid.innerHTML = HOTELS.map(hotel => {
+      const statuses = data.channels.map(ch => getLatestRecord(selectedDate, hotel, ch));
+      const hasDiff = statuses.some(r=>r && r.result === 'diff');
+      const filled = statuses.filter(Boolean).length;
+      const allOk = filled === data.channels.length && statuses.every(r=>r.result==='ok');
+      const cls = hasDiff ? 'has-diff' : allOk ? 'all-ok' : filled ? 'partial' : '';
+      const pillCls = hasDiff ? 'diff' : allOk ? 'ok' : '';
+      const pillText = hasDiff ? 'Има разлики' : allOk ? 'Всичко OK' : filled ? `${filled}/${data.channels.length} канала` : 'Няма записи';
+      const rows = data.channels.map((ch,i) => {
+        const r = statuses[i];
+        const chip = r ? (r.result === 'ok' ? '<span class="status-chip ok">✅ OK</span>' : '<span class="status-chip diff">⚠️ Има разлики</span>') : '<span class="status-chip none">— Няма запис</span>';
+        return `<div class="channel-row"><div class="channel-name">${ch}</div><div>${chip}</div></div>`;
+      }).join('');
+      return `<button class="hotel-card ${cls}" data-hotel-card="${escapeHtml(hotel)}"><div class="bar"></div><div class="hotel-content"><div class="hotel-title"><h3>${escapeHtml(hotel)}</h3><span class="hotel-pill ${pillCls}">${pillText}</span></div>${rows}</div></button>`;
+    }).join('');
+    els.hotelGrid.querySelectorAll('[data-hotel-card]').forEach(card => card.addEventListener('click', () => openHotel(card.dataset.hotelCard)));
+  }
+  function renderSingleCalendar(){
+    const y = singleCalendarMonth.getFullYear();
+    const m = singleCalendarMonth.getMonth();
+    els.singleMonthTitle.textContent = `${MONTHS[m]} ${y}`;
+    els.singleCalendar.innerHTML = DOW.map(d=>`<div class="dow">${d}</div>`).join('') + calendarDaysHtml(singleCalendarMonth, parseBgDate(draft.checkDate), null, null, 'single');
+    els.singleCalendar.querySelectorAll('[data-cal-date]').forEach(btn => btn.addEventListener('click', () => {
+      draft.checkDate = btn.dataset.calDate;
+      selectedDate = draft.checkDate;
+      closeModal('dateModal');
+      renderAll();
+    }));
+  }
+  function renderPeriodCalendars(){
+    const first = new Date(periodBaseMonth);
+    const second = new Date(periodBaseMonth); second.setMonth(second.getMonth()+1);
+    const title = tempPeriodStart && tempPeriodEnd ? `${formatBgDate(tempPeriodStart)} - ${formatBgDate(tempPeriodEnd)}` : tempPeriodStart ? `${formatBgDate(tempPeriodStart)} - избери край` : 'Избери начало и край';
+    els.periodTitle.textContent = title;
+    els.periodCalendars.innerHTML = [first, second].map(monthDate => {
+      return `<div><div class="period-month-title">${MONTHS[monthDate.getMonth()]} ${monthDate.getFullYear()}</div><div class="period-month-grid">${DOW.map(d=>`<div class="dow">${d}</div>`).join('')}${calendarDaysHtml(monthDate, null, tempPeriodStart, tempPeriodEnd, 'period')}</div></div>`;
+    }).join('');
+    els.periodCalendars.querySelectorAll('[data-period-date]').forEach(btn => btn.addEventListener('click', () => choosePeriodDate(parseBgDate(btn.dataset.periodDate))));
+  }
+  function calendarDaysHtml(monthDate, selected, rangeStart, rangeEnd, mode){
+    const y = monthDate.getFullYear(), m = monthDate.getMonth();
+    const first = new Date(y,m,1);
+    const startOffset = (first.getDay()+6)%7; // Monday first
+    const gridStart = new Date(y,m,1-startOffset);
+    let html = '';
+    for (let i=0;i<42;i++){
+      const d = new Date(gridStart); d.setDate(gridStart.getDate()+i);
+      const out = d.getMonth() !== m;
+      let cls = 'day' + (out ? ' out' : '');
+      if (selected && sameDay(d, selected)) cls += ' selected';
+      let attr = mode === 'single' ? `data-cal-date="${formatBgDate(d)}"` : `data-period-date="${formatBgDate(d)}"`;
+      if (rangeStart && sameDay(d, rangeStart)) cls += ' range-start';
+      if (rangeEnd && sameDay(d, rangeEnd)) cls += ' range-end';
+      if (rangeStart && rangeEnd) {
+        const a = Math.min(dateValue(rangeStart), dateValue(rangeEnd));
+        const b = Math.max(dateValue(rangeStart), dateValue(rangeEnd));
+        const v = dateValue(d);
+        if (v > a && v < b) cls += ' in-range';
+      }
+      html += `<button type="button" class="${cls}" ${attr}>${d.getDate()}</button>`;
+    }
+    return html;
+  }
+  function choosePeriodDate(d){
+    if (!tempPeriodStart || (tempPeriodStart && tempPeriodEnd)) { tempPeriodStart = d; tempPeriodEnd = null; }
+    else {
+      tempPeriodEnd = d;
+      if (tempPeriodStart > tempPeriodEnd) [tempPeriodStart,tempPeriodEnd] = [tempPeriodEnd,tempPeriodStart];
+    }
+    renderPeriodCalendars();
+  }
+  function addRecord(){
+    draft.finding = els.findingInput.value.trim();
+    draft.employee = els.employeeSelect.value;
+    const errors = [];
+    if (!draft.checkDate) errors.push('Избери дата на проверката.');
+    if (!draft.periodStart || !draft.periodEnd) errors.push('Избери искан период.');
+    if (!draft.hotel) errors.push('Избери хотел.');
+    if (!draft.channel) errors.push('Избери канал.');
+    if (!draft.employee) errors.push('Избери служител.');
+    if (draft.result === 'diff' && !draft.finding) errors.push('При „Има разлики“ попълни какво е установено.');
+    if (errors.length) { alert(errors.join('\n')); return; }
+    data.records.push({
+      id: makeId(),
+      checkDate: draft.checkDate,
+      periodStart: draft.periodStart,
+      periodEnd: draft.periodEnd,
+      hotel: draft.hotel,
+      channel: draft.channel,
+      result: draft.result,
+      finding: draft.finding,
+      employee: draft.employee,
+      createdAt: new Date().toISOString()
+    });
+    selectedDate = draft.checkDate;
+    draft.finding = '';
+    els.findingInput.value = '';
+    persistData();
+    renderAll();
+    showToast('Записът е добавен.');
+  }
+  function resetDraft(){
+    draft = { checkDate: selectedDate, periodStart:'', periodEnd:'', hotel:HOTELS[0], channel:data.channels[0] || '', result:'ok', finding:'', employee:data.employees[0]||'' };
+    renderDraft();
+  }
+  function openHotel(hotel){
+    els.hotelModalTitle.textContent = `${hotel} · ${selectedDate}`;
+    const list = recordsForHotel(selectedDate, hotel);
+    if (!list.length) {
+      els.hotelModalBody.innerHTML = '<div class="empty-state">За този хотел няма въведени записи за избраната дата.</div>';
+    } else {
+      els.hotelModalBody.innerHTML = `<div class="record-list">${list.map(r => `
+        <div class="record-card">
+          <div class="record-top">
+            <div><div class="record-title">${escapeHtml(r.channel)} · ${r.result==='ok'?'✅ ОК / няма разлики':'⚠️ Има разлики'}</div><div class="record-meta">Период: ${escapeHtml(r.periodStart)} - ${escapeHtml(r.periodEnd)} · Служител: ${escapeHtml(r.employee)} · ${new Date(r.createdAt).toLocaleTimeString('bg-BG',{hour:'2-digit',minute:'2-digit'})}</div></div>
+            <button class="btn small danger" data-delete="${escapeHtml(r.id)}">Изтрий</button>
+          </div>
+          ${r.finding ? `<div class="record-text">${escapeHtml(r.finding)}</div>` : `<div class="record-text" style="color:var(--muted)">Няма описани разлики.</div>`}
+        </div>`).join('')}</div>`;
+      els.hotelModalBody.querySelectorAll('[data-delete]').forEach(btn => btn.addEventListener('click', () => deleteRecord(btn.dataset.delete)));
+    }
+    openModal('hotelModal');
+  }
+  function deleteRecord(id){
+    if (!confirm('Да изтрия ли този запис?')) return;
+    data.records = data.records.filter(r => r.id !== id);
+    persistData();
+    renderAll();
+    closeModal('hotelModal');
+    showToast('Записът е изтрит.');
+  }
+  function renderSettings(){
+    els.googleScriptUrlInput.value = googleScriptUrl || '';
+    els.employeeList.innerHTML = data.employees.length ? data.employees.map(name => `<span class="employee-token">${escapeHtml(name)} <button title="Промени" type="button" data-edit-employee="${escapeHtml(name)}">✎</button><button title="Премахни" type="button" data-remove-employee="${escapeHtml(name)}">×</button></span>`).join('') : '<div class="empty-state">Няма добавени служители.</div>';
+    els.employeeList.querySelectorAll('[data-edit-employee]').forEach(btn => btn.addEventListener('click', () => renameEmployee(btn.dataset.editEmployee)));
+    els.employeeList.querySelectorAll('[data-remove-employee]').forEach(btn => btn.addEventListener('click', () => {
+      const name = btn.dataset.removeEmployee;
+      if (!confirm(`Да премахна ли служител „${name}“?`)) return;
+      data.employees = data.employees.filter(e => e !== name);
+      if (draft.employee === name) draft.employee = data.employees[0] || '';
+      persistData();
+      renderSettings(); renderDraft();
+    }));
+
+    els.channelList.innerHTML = data.channels.length ? data.channels.map(name => `<span class="employee-token">${escapeHtml(name)} <button title="Промени" type="button" data-edit-channel="${escapeHtml(name)}">✎</button><button title="Премахни" type="button" data-remove-channel="${escapeHtml(name)}">×</button></span>`).join('') : '<div class="empty-state">Няма добавени канали.</div>';
+    els.channelList.querySelectorAll('[data-edit-channel]').forEach(btn => btn.addEventListener('click', () => renameChannel(btn.dataset.editChannel)));
+    els.channelList.querySelectorAll('[data-remove-channel]').forEach(btn => btn.addEventListener('click', () => removeChannel(btn.dataset.removeChannel)));
+  }
+  function addEmployee(){
+    const name = els.employeeInput.value.trim();
+    if (!name) return;
+    if (!data.employees.includes(name)) data.employees.push(name);
+    els.employeeInput.value = '';
+    if (!draft.employee) draft.employee = name;
+    persistData();
+    renderSettings(); renderDraft();
+  }
+  function renameEmployee(oldName){
+    const newName = prompt('Ново име на служител:', oldName);
+    if (newName === null) return;
+    const clean = newName.trim();
+    if (!clean || clean === oldName) return;
+    if (data.employees.includes(clean)) { alert('Вече има служител с това име.'); return; }
+    data.employees = data.employees.map(e => e === oldName ? clean : e);
+    data.records.forEach(r => { if (r.employee === oldName) r.employee = clean; });
+    if (draft.employee === oldName) draft.employee = clean;
+    persistData();
+    renderSettings(); renderAll();
+  }
+  function addChannel(){
+    const name = els.channelInput.value.trim();
+    if (!name) return;
+    if (!data.channels.includes(name)) data.channels.push(name);
+    els.channelInput.value = '';
+    if (!draft.channel) draft.channel = name;
+    persistData();
+    renderSettings(); renderAll();
+  }
+  function renameChannel(oldName){
+    const newName = prompt('Ново име на канал:', oldName);
+    if (newName === null) return;
+    const clean = newName.trim();
+    if (!clean || clean === oldName) return;
+    if (data.channels.includes(clean)) { alert('Вече има канал с това име.'); return; }
+    data.channels = data.channels.map(c => c === oldName ? clean : c);
+    data.records.forEach(r => { if (r.channel === oldName) r.channel = clean; });
+    if (draft.channel === oldName) draft.channel = clean;
+    persistData();
+    renderSettings(); renderAll();
+  }
+  function removeChannel(name){
+    if (data.channels.length <= 1) { alert('Трябва да остане поне един канал.'); return; }
+    if (!confirm(`Да премахна ли канал „${name}“? Старите записи с този канал ще останат в историята, но каналът няма да е активен за нови проверки.`)) return;
+    data.channels = data.channels.filter(c => c !== name);
+    if (draft.channel === name) draft.channel = data.channels[0] || '';
+    persistData();
+    renderSettings(); renderAll();
+  }
+})();
+</script>
+</body>
+</html>
