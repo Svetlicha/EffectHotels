@@ -79,6 +79,9 @@
     .choice{border:1px solid var(--line);background:#fff;color:var(--text);border-radius:14px;min-height:44px;padding:10px 12px;font-weight:800;transition:.16s ease;text-align:center}
     .choice:hover{border-color:#b7c7e6;box-shadow:var(--shadow-soft)}
     .choice.active{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 10px 20px rgba(33,86,217,.20)}
+    .choice.channel-choice{display:flex;align-items:center;justify-content:center;gap:8px;position:relative}
+    .choice.channel-choice .tick{width:20px;height:20px;border-radius:999px;border:1px solid #cbd5e1;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:950;background:#fff;color:transparent;flex:0 0 auto}
+    .choice.channel-choice.active .tick{border-color:rgba(255,255,255,.72);background:rgba(255,255,255,.18);color:#fff}
     .choice.result-ok.active{background:var(--ok);border-color:var(--ok)}
     .choice.result-diff.active{background:var(--diff);border-color:var(--diff)}
     textarea{width:100%;min-height:126px;resize:vertical;border:1px solid var(--line);border-radius:16px;padding:13px 14px;background:#fff;color:var(--text);outline:none;line-height:1.35}
@@ -123,6 +126,8 @@
     .channel-row{display:grid;grid-template-columns:94px 1fr;gap:10px;align-items:center;padding:8px 0;border-top:1px solid #edf1f7}
     .channel-row:first-of-type{border-top:0}
     .channel-name{font-weight:900;color:#334155;font-size:13px}
+    .channel-status{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .channel-employee{font-size:12px;font-weight:900;color:#475569;background:#f8fafc;border:1px solid #e2e8f0;border-radius:999px;padding:6px 9px}
     .status-chip{justify-self:start;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:900;background:var(--empty);color:var(--empty-text)}
     .status-chip.ok{background:var(--ok-soft);color:var(--ok)}
     .status-chip.diff{background:var(--diff-soft);color:var(--diff)}
@@ -616,10 +621,20 @@
   function closeModal(id){ document.getElementById(id).classList.remove('show'); }
   function showToast(msg){ els.toast.textContent = msg; els.toast.classList.remove('show'); void els.toast.offsetWidth; els.toast.classList.add('show'); }
   function makeId(){ return 'rec-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8); }
+  function normalizeChannelList(list){
+    const clean = Array.from(new Set((list || []).map(v => String(v || '').trim()).filter(Boolean)));
+    return clean.filter(ch => data.channels.includes(ch));
+  }
   function getDraftChannels(){
-    if (Array.isArray(draft.channels)) return draft.channels.filter(Boolean);
-    if (draft.channel) return [draft.channel];
+    if (Array.isArray(draft.channels)) return normalizeChannelList(draft.channels);
+    if (draft.channel) return normalizeChannelList([draft.channel]);
     return [];
+  }
+  function getSelectedChannelsFromUi(){
+    const selected = Array.from(els.channelChoices.querySelectorAll('[data-channel-index].active'))
+      .map(btn => data.channels[Number(btn.dataset.channelIndex)])
+      .filter(Boolean);
+    return normalizeChannelList(selected.length ? selected : getDraftChannels());
   }
   function getLatestRecord(checkDate, hotel, channel){
     return data.records
@@ -647,13 +662,21 @@
     draft.channels = draft.channels.filter(ch => data.channels.includes(ch));
     if (!draft.channels.length && data.channels.length) draft.channels = [data.channels[0]];
     els.hotelChoices.innerHTML = HOTELS.map(h => `<button type="button" class="choice ${draft.hotel===h?'active':''}" data-hotel="${escapeHtml(h)}">${escapeHtml(h)}</button>`).join('');
-    els.channelChoices.innerHTML = data.channels.map(c => `<button type="button" class="choice ${draft.channels.includes(c)?'active':''}" data-channel="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('');
+    els.channelChoices.innerHTML = data.channels.map((c, idx) => {
+      const active = draft.channels.includes(c);
+      return `<button type="button" class="choice channel-choice ${active?'active':''}" aria-pressed="${active?'true':'false'}" data-channel-index="${idx}"><span class="tick">✓</span><span>${escapeHtml(c)}</span></button>`;
+    }).join('');
     document.querySelectorAll('[data-hotel]').forEach(b => b.addEventListener('click', () => { draft.hotel = b.dataset.hotel; renderDraft(); }));
-    document.querySelectorAll('[data-channel]').forEach(b => b.addEventListener('click', () => {
-      const ch = b.dataset.channel;
+    els.channelChoices.querySelectorAll('[data-channel-index]').forEach(b => b.addEventListener('click', () => {
+      const ch = data.channels[Number(b.dataset.channelIndex)];
+      if (!ch) return;
       const current = new Set(getDraftChannels());
-      if (current.has(ch)) current.delete(ch); else current.add(ch);
-      draft.channels = Array.from(current);
+      if (editingRecordId) {
+        draft.channels = [ch];
+      } else {
+        if (current.has(ch)) current.delete(ch); else current.add(ch);
+        draft.channels = Array.from(current);
+      }
       renderDraft();
     }));
     document.querySelectorAll('[data-result]').forEach(b => {
@@ -710,7 +733,8 @@
       const rows = data.channels.map((ch,i) => {
         const r = statuses[i];
         const chip = r ? (r.result === 'ok' ? '<span class="status-chip ok">✅ OK</span>' : '<span class="status-chip diff">⚠️ Има разлики</span>') : '<span class="status-chip none">— Няма запис</span>';
-        return `<div class="channel-row"><div class="channel-name">${ch}</div><div>${chip}</div></div>`;
+        const employee = r && r.employee ? `<span class="channel-employee">${escapeHtml(r.employee)}</span>` : '';
+        return `<div class="channel-row"><div class="channel-name">${escapeHtml(ch)}</div><div class="channel-status">${chip}${employee}</div></div>`;
       }).join('');
       return `<button class="hotel-card ${cls}" data-hotel-card="${escapeHtml(hotel)}"><div class="bar"></div><div class="hotel-content"><div class="hotel-title"><h3>${escapeHtml(hotel)}</h3><span class="hotel-pill ${pillCls}">${pillText}</span></div>${rows}</div></button>`;
     }).join('');
@@ -773,7 +797,8 @@
   function addRecord(){
     draft.finding = els.findingInput.value.trim();
     draft.employee = els.employeeSelect.value;
-    const selectedChannels = getDraftChannels();
+    const selectedChannels = getSelectedChannelsFromUi();
+    draft.channels = selectedChannels;
     const errors = [];
     if (!draft.checkDate) errors.push('Избери дата на проверката.');
     if (!draft.periodStart || !draft.periodEnd) errors.push('Избери искан период.');
