@@ -199,7 +199,7 @@
       </div>
     </div>
     <div class="top-actions">
-      <span class="sync-status" id="syncStatus">☁ Локално</span>
+      <span class="sync-status" id="syncStatus">☁ Google Drive</span>
       <button class="btn ghost" id="settingsBtn">⚙ Настройки</button>
     </div>
   </header>
@@ -344,7 +344,7 @@
           <button class="btn primary" id="saveGoogleUrlBtn" type="button">Запази URL</button>
           <button class="btn ghost" id="loadGoogleBtn" type="button">Зареди от Google Drive</button>
         </div>
-        <div class="drive-help">URL адресът е вграден предварително. Всяка реална промяна се записва автоматично: първо локално, после към Google Drive в папка ResCheck. Записът към Google Drive се прави със забавяне от около 1 секунда.</div>
+        <div class="drive-help">URL адресът е вграден предварително. Данните не се пазят в браузъра. Всяка реална промяна се записва автоматично към Google Drive в папка ResCheck със забавяне от около 1 секунда.</div>
       </div>
       <div class="form-section">
         <h3>Служители</h3>
@@ -385,11 +385,8 @@
   const OLD_STORAGE_KEYS = ['reservation_checks_github_v11_data','reservation_checks_github_v10_data','reservation_checks_github_v9_data','reservation_checks_github_v8_data'];
   const SCRIPT_URL_KEY = 'reservation_checks_google_script_url_v12';
   const DEFAULT_GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyf0A7UMudFx-cQo4bRuflEn39erqJ8CH29vZ-fnO3k-ChwS2P1LLKxI9zBC2wPzEgz/exec';
-  const storedGoogleScriptUrl = localStorage.getItem(SCRIPT_URL_KEY) || '';
   let googleScriptUrl = DEFAULT_GOOGLE_SCRIPT_URL;
-  if (storedGoogleScriptUrl !== DEFAULT_GOOGLE_SCRIPT_URL) {
-    localStorage.setItem(SCRIPT_URL_KEY, DEFAULT_GOOGLE_SCRIPT_URL);
-  }
+  clearBrowserCacheKeys();
   let remoteSaveTimer = null;
   let loadingRemote = false;
   let savingRemote = false;
@@ -480,25 +477,18 @@
   els.addRecordBtn.addEventListener('click', addRecord);
   els.resetDraftBtn.addEventListener('click', resetDraft);
 
-  if (!localStorage.getItem(SCRIPT_URL_KEY) && DEFAULT_GOOGLE_SCRIPT_URL) {
-    try { localStorage.setItem(SCRIPT_URL_KEY, DEFAULT_GOOGLE_SCRIPT_URL); } catch(e) {}
-  }
   renderAll();
   lastRemotePayload = JSON.stringify(data);
   updateSyncStatus();
   if (googleScriptUrl) loadRemoteData(false);
 
-  function safeData(){
+  function clearBrowserCacheKeys(){
     try {
-      const keys = [STORAGE_KEY].concat(OLD_STORAGE_KEYS || []);
-      for (const key of keys) {
-        const saved = localStorage.getItem(key);
-        if (saved) {
-          const parsedSaved = JSON.parse(saved);
-          return normalizeData(parsedSaved);
-        }
-      }
+      const keys = [STORAGE_KEY, SCRIPT_URL_KEY].concat(OLD_STORAGE_KEYS || []);
+      keys.forEach(key => localStorage.removeItem(key));
     } catch(e) {}
+  }
+  function safeData(){
     try {
       const parsed = JSON.parse(dataEl.textContent || '{}');
       return normalizeData(parsed);
@@ -513,7 +503,6 @@
     };
   }
   function persistData(){
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e) {}
     if (!loadingRemote && googleScriptUrl) scheduleRemoteSave();
   }
   function cleanScriptUrl(){ return String(googleScriptUrl || '').trim(); }
@@ -522,17 +511,18 @@
     els.syncStatus.classList.remove('online','saving','error');
     if (state) els.syncStatus.classList.add(state);
     if (message) { els.syncStatus.textContent = message; return; }
-    if (!googleScriptUrl) els.syncStatus.textContent = '☁ Локално';
+    if (!googleScriptUrl) els.syncStatus.textContent = '☁ Няма Google URL';
     else els.syncStatus.textContent = '☁ Google Drive';
     if (googleScriptUrl) els.syncStatus.classList.add('online');
   }
   function saveGoogleUrl(){
     const url = els.googleScriptUrlInput.value.trim();
-    googleScriptUrl = url;
-    if (url) localStorage.setItem(SCRIPT_URL_KEY, url); else localStorage.removeItem(SCRIPT_URL_KEY);
+    googleScriptUrl = url || DEFAULT_GOOGLE_SCRIPT_URL;
+    els.googleScriptUrlInput.value = googleScriptUrl;
+    clearBrowserCacheKeys();
     updateSyncStatus();
-    showToast(url ? 'Google Drive URL е запазен. Автоматичното записване е включено.' : 'Google Drive URL е премахнат.');
-    if (url) scheduleRemoteSave(true);
+    showToast('Google Drive URL е активен само за тази версия. Нищо не се пази в браузъра.');
+    if (googleScriptUrl) scheduleRemoteSave(true);
   }
   function scheduleRemoteSave(force){
     clearTimeout(remoteSaveTimer);
@@ -553,7 +543,7 @@
       const incoming = payload.data || payload;
       data = normalizeData(incoming);
       if (!data.channels.length) data.channels = ['Booking','Quendoo','TO'];
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      clearBrowserCacheKeys();
       lastRemotePayload = JSON.stringify(data);
       selectedDate = data.records.length ? latestRecordDate() : todayBg();
       draft = { checkDate:selectedDate, periodStart:'', periodEnd:'', hotel:HOTELS[0], channels:data.channels.length ? [data.channels[0]] : [], result:'ok', finding:'', employee:data.employees[0] || '' };
