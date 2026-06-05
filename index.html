@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Дневник проверки на резервации v11</title>
+  <title>Дневник проверки на резервации v14</title>
   <style>
     :root{
       --bg:#f3f6fb;
@@ -149,6 +149,7 @@
     .record-list{display:grid;gap:12px}
     .record-card{border:1px solid var(--line);border-radius:18px;padding:14px;background:var(--surface-soft)}
     .record-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+    .record-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
     .record-title{font-weight:950}
     .record-meta{font-size:12px;color:var(--muted);font-weight:800}
     .record-text{white-space:pre-wrap;line-height:1.45;color:#334155;margin-top:8px}
@@ -199,9 +200,9 @@
   </header>
 
   <section class="new-shell">
-    <details class="new-entry" open>
+    <details class="new-entry" open id="newEntryPanel">
       <summary>
-        <span class="summary-title">Нов запис <span class="summary-badge" id="draftBadge">готов за въвеждане</span></span>
+        <span class="summary-title"><span id="newEntryTitle">Нов запис</span> <span class="summary-badge" id="draftBadge">готов за въвеждане</span></span>
         <span class="chev">⌄</span>
       </summary>
       <div class="new-body">
@@ -332,7 +333,7 @@
       <div class="form-section">
         <h3>Google Drive съхранение</h3>
         <label class="label">Google Apps Script URL</label>
-        <input id="googleScriptUrlInput" class="wide-input" value="https://script.google.com/macros/s/AKfycbzMIX90nfPf0VWzgsXwNPPL4EvBBgbKABjeFRbV4wBKrCs-kA8gpCkWxqPBhGWOWX1Y/exec" placeholder="Постави Web App URL, който завършва на /exec">
+        <input id="googleScriptUrlInput" class="wide-input" value="https://script.google.com/macros/s/AKfycbyf0A7UMudFx-cQo4bRuflEn39erqJ8CH29vZ-fnO3k-ChwS2P1LLKxI9zBC2wPzEgz/exec" placeholder="Постави Web App URL, който завършва на /exec">
         <div class="settings-actions">
           <button class="btn primary" id="saveGoogleUrlBtn" type="button">Запази URL</button>
           <button class="btn ghost" id="loadGoogleBtn" type="button">Зареди от Google Drive</button>
@@ -377,7 +378,7 @@
   const STORAGE_KEY = 'reservation_checks_github_v12_data';
   const OLD_STORAGE_KEYS = ['reservation_checks_github_v11_data','reservation_checks_github_v10_data','reservation_checks_github_v9_data','reservation_checks_github_v8_data'];
   const SCRIPT_URL_KEY = 'reservation_checks_google_script_url_v12';
-  const DEFAULT_GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzMIX90nfPf0VWzgsXwNPPL4EvBBgbKABjeFRbV4wBKrCs-kA8gpCkWxqPBhGWOWX1Y/exec';
+  const DEFAULT_GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyf0A7UMudFx-cQo4bRuflEn39erqJ8CH29vZ-fnO3k-ChwS2P1LLKxI9zBC2wPzEgz/exec';
   let googleScriptUrl = localStorage.getItem(SCRIPT_URL_KEY) || DEFAULT_GOOGLE_SCRIPT_URL;
   let remoteSaveTimer = null;
   let loadingRemote = false;
@@ -398,6 +399,7 @@
     finding: '',
     employee: data.employees[0] || ''
   };
+  let editingRecordId = null;
   let singleCalendarMonth = startOfMonth(parseBgDate(draft.checkDate));
   let periodBaseMonth = startOfMonth(parseBgDate(draft.checkDate));
   let tempPeriodStart = null;
@@ -417,6 +419,8 @@
     summaryStrip: document.getElementById('summaryStrip'),
     hotelGrid: document.getElementById('hotelGrid'),
     draftBadge: document.getElementById('draftBadge'),
+    newEntryPanel: document.getElementById('newEntryPanel'),
+    newEntryTitle: document.getElementById('newEntryTitle'),
     singleCalendar: document.getElementById('singleCalendar'),
     singleMonthTitle: document.getElementById('singleMonthTitle'),
     periodCalendars: document.getElementById('periodCalendars'),
@@ -491,10 +495,11 @@
     } catch(e) { return {employees:[],channels:[],records:[]}; }
   }
   function normalizeData(parsed){
+    const records = Array.isArray(parsed.records) ? parsed.records.map(r => ({ ...r, id: r && r.id ? r.id : makeId() })) : [];
     return {
       employees: Array.isArray(parsed.employees) ? parsed.employees : [],
       channels: Array.isArray(parsed.channels) ? parsed.channels : [],
-      records: Array.isArray(parsed.records) ? parsed.records : []
+      records
     };
   }
   function persistData(){
@@ -637,6 +642,9 @@
       b.addEventListener('click', () => { draft.result = b.dataset.result; renderDraft(); });
     });
     els.findingInput.value = draft.finding || '';
+    if (els.newEntryTitle) els.newEntryTitle.textContent = editingRecordId ? 'Редакция на запис' : 'Нов запис';
+    els.addRecordBtn.textContent = editingRecordId ? 'Запази редакцията' : 'Запиши проверката';
+    els.resetDraftBtn.textContent = editingRecordId ? 'Откажи редакция' : 'Изчисти';
     renderDraftBadge();
   }
   function renderDraftBadge(){
@@ -647,7 +655,7 @@
     if (!draft.channel) missing.push('канал');
     if (!draft.employee) missing.push('служител');
     if (draft.result === 'diff' && !String(draft.finding||'').trim()) missing.push('установено');
-    els.draftBadge.textContent = missing.length ? 'липсва: ' + missing.join(', ') : 'готов за запис';
+    els.draftBadge.textContent = missing.length ? 'липсва: ' + missing.join(', ') : (editingRecordId ? 'готов за редакция' : 'готов за запис');
   }
   function renderChecks(){
     const allDates = Array.from(new Set([...data.records.map(r=>r.checkDate), selectedDate])).sort((a,b)=>parseBgDate(b)-parseBgDate(a));
@@ -754,8 +762,9 @@
     if (!draft.employee) errors.push('Избери служител.');
     if (draft.result === 'diff' && !draft.finding) errors.push('При „Има разлики“ попълни какво е установено.');
     if (errors.length) { alert(errors.join('\n')); return; }
-    data.records.push({
-      id: makeId(),
+
+    const now = new Date().toISOString();
+    const recordData = {
       checkDate: draft.checkDate,
       periodStart: draft.periodStart,
       periodEnd: draft.periodEnd,
@@ -763,17 +772,37 @@
       channel: draft.channel,
       result: draft.result,
       finding: draft.finding,
-      employee: draft.employee,
-      createdAt: new Date().toISOString()
-    });
+      employee: draft.employee
+    };
+
+    if (editingRecordId) {
+      const idx = data.records.findIndex(r => r.id === editingRecordId);
+      if (idx === -1) {
+        alert('Записът вече не съществува. Ще изчистя режима за редакция.');
+        editingRecordId = null;
+        resetDraft();
+        return;
+      }
+      data.records[idx] = { ...data.records[idx], ...recordData, updatedAt: now };
+      showToast('Записът е обновен.');
+    } else {
+      data.records.push({
+        id: makeId(),
+        ...recordData,
+        createdAt: now
+      });
+      showToast('Записът е добавен.');
+    }
+
     selectedDate = draft.checkDate;
+    editingRecordId = null;
     draft.finding = '';
     els.findingInput.value = '';
     persistData();
     renderAll();
-    showToast('Записът е добавен.');
   }
   function resetDraft(){
+    editingRecordId = null;
     draft = { checkDate: selectedDate, periodStart:'', periodEnd:'', hotel:HOTELS[0], channel:data.channels[0] || '', result:'ok', finding:'', employee:data.employees[0]||'' };
     renderDraft();
   }
@@ -786,18 +815,47 @@
       els.hotelModalBody.innerHTML = `<div class="record-list">${list.map(r => `
         <div class="record-card">
           <div class="record-top">
-            <div><div class="record-title">${escapeHtml(r.channel)} · ${r.result==='ok'?'✅ ОК / няма разлики':'⚠️ Има разлики'}</div><div class="record-meta">Период: ${escapeHtml(r.periodStart)} - ${escapeHtml(r.periodEnd)} · Служител: ${escapeHtml(r.employee)} · ${new Date(r.createdAt).toLocaleTimeString('bg-BG',{hour:'2-digit',minute:'2-digit'})}</div></div>
-            <button class="btn small danger" data-delete="${escapeHtml(r.id)}">Изтрий</button>
+            <div><div class="record-title">${escapeHtml(r.channel)} · ${r.result==='ok'?'✅ ОК / няма разлики':'⚠️ Има разлики'}</div><div class="record-meta">Период: ${escapeHtml(r.periodStart)} - ${escapeHtml(r.periodEnd)} · Служител: ${escapeHtml(r.employee)} · ${new Date(r.createdAt || r.updatedAt || Date.now()).toLocaleTimeString('bg-BG',{hour:'2-digit',minute:'2-digit'})}</div></div>
+            <div class="record-actions"><button class="btn small ghost" data-edit-record="${escapeHtml(r.id)}">Редактирай</button><button class="btn small danger" data-delete="${escapeHtml(r.id)}">Изтрий</button></div>
           </div>
           ${r.finding ? `<div class="record-text">${escapeHtml(r.finding)}</div>` : `<div class="record-text" style="color:var(--muted)">Няма описани разлики.</div>`}
         </div>`).join('')}</div>`;
+      els.hotelModalBody.querySelectorAll('[data-edit-record]').forEach(btn => btn.addEventListener('click', () => editRecord(btn.dataset.editRecord)));
       els.hotelModalBody.querySelectorAll('[data-delete]').forEach(btn => btn.addEventListener('click', () => deleteRecord(btn.dataset.delete)));
     }
     openModal('hotelModal');
   }
+  function editRecord(id){
+    const record = data.records.find(r => r.id === id);
+    if (!record) { alert('Записът не е намерен.'); return; }
+    if (record.channel && !data.channels.includes(record.channel)) data.channels.push(record.channel);
+    if (record.employee && !data.employees.includes(record.employee)) data.employees.push(record.employee);
+    editingRecordId = id;
+    draft = {
+      checkDate: record.checkDate || selectedDate,
+      periodStart: record.periodStart || '',
+      periodEnd: record.periodEnd || '',
+      hotel: record.hotel || HOTELS[0],
+      channel: record.channel || data.channels[0] || '',
+      result: record.result || 'ok',
+      finding: record.finding || '',
+      employee: record.employee || data.employees[0] || ''
+    };
+    selectedDate = draft.checkDate;
+    singleCalendarMonth = startOfMonth(parseBgDate(draft.checkDate));
+    periodBaseMonth = startOfMonth(parseBgDate(draft.checkDate));
+    closeModal('hotelModal');
+    renderAll();
+    if (els.newEntryPanel) {
+      els.newEntryPanel.open = true;
+      setTimeout(() => els.newEntryPanel.scrollIntoView({ behavior:'smooth', block:'start' }), 40);
+    }
+    showToast('Записът е зареден за редакция.');
+  }
   function deleteRecord(id){
     if (!confirm('Да изтрия ли този запис?')) return;
     data.records = data.records.filter(r => r.id !== id);
+    if (editingRecordId === id) editingRecordId = null;
     persistData();
     renderAll();
     closeModal('hotelModal');
