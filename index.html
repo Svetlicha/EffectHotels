@@ -332,12 +332,12 @@
       <div class="form-section">
         <h3>Google Drive съхранение</h3>
         <label class="label">Google Apps Script URL</label>
-        <input id="googleScriptUrlInput" class="wide-input" placeholder="Постави Web App URL, който завършва на /exec">
+        <input id="googleScriptUrlInput" class="wide-input" value="https://script.google.com/macros/s/AKfycbzMIX90nfPf0VWzgsXwNPPL4EvBBgbKABjeFRbV4wBKrCs-kA8gpCkWxqPBhGWOWX1Y/exec" placeholder="Постави Web App URL, който завършва на /exec">
         <div class="settings-actions">
           <button class="btn primary" id="saveGoogleUrlBtn" type="button">Запази URL</button>
           <button class="btn ghost" id="loadGoogleBtn" type="button">Зареди от Google Drive</button>
         </div>
-        <div class="drive-help">След като поставиш URL, всяка реална промяна се записва автоматично: първо локално, после към Google Drive. Записът към Google Drive се прави със забавяне от около 1 секунда, за да не се създава backup при всяко отделно натискане.</div>
+        <div class="drive-help">URL адресът е вграден предварително. Всяка реална промяна се записва автоматично: първо локално, после към Google Drive. Записът към Google Drive се прави със забавяне от около 1 секунда, за да не се създава backup при всяко отделно натискане.</div>
       </div>
       <div class="form-section">
         <h3>Служители</h3>
@@ -374,10 +374,11 @@
   const MONTHS = ['Януари','Февруари','Март','Април','Май','Юни','Юли','Август','Септември','Октомври','Ноември','Декември'];
   const DOW = ['П','В','С','Ч','П','С','Н'];
   const dataEl = document.getElementById('app-data');
-  const STORAGE_KEY = 'reservation_checks_github_v11_data';
-  const OLD_STORAGE_KEYS = ['reservation_checks_github_v10_data','reservation_checks_github_v9_data','reservation_checks_github_v8_data'];
-  const SCRIPT_URL_KEY = 'reservation_checks_google_script_url';
-  let googleScriptUrl = localStorage.getItem(SCRIPT_URL_KEY) || '';
+  const STORAGE_KEY = 'reservation_checks_github_v12_data';
+  const OLD_STORAGE_KEYS = ['reservation_checks_github_v11_data','reservation_checks_github_v10_data','reservation_checks_github_v9_data','reservation_checks_github_v8_data'];
+  const SCRIPT_URL_KEY = 'reservation_checks_google_script_url_v12';
+  const DEFAULT_GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzMIX90nfPf0VWzgsXwNPPL4EvBBgbKABjeFRbV4wBKrCs-kA8gpCkWxqPBhGWOWX1Y/exec';
+  let googleScriptUrl = localStorage.getItem(SCRIPT_URL_KEY) || DEFAULT_GOOGLE_SCRIPT_URL;
   let remoteSaveTimer = null;
   let loadingRemote = false;
   let savingRemote = false;
@@ -465,6 +466,9 @@
   els.addRecordBtn.addEventListener('click', addRecord);
   els.resetDraftBtn.addEventListener('click', resetDraft);
 
+  if (!localStorage.getItem(SCRIPT_URL_KEY) && DEFAULT_GOOGLE_SCRIPT_URL) {
+    try { localStorage.setItem(SCRIPT_URL_KEY, DEFAULT_GOOGLE_SCRIPT_URL); } catch(e) {}
+  }
   renderAll();
   lastRemotePayload = JSON.stringify(data);
   updateSyncStatus();
