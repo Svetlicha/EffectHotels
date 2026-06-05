@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Дневник проверки на резервации v14</title>
+  <title>Дневник проверки на резервации v16</title>
   <style>
     :root{
       --bg:#f3f6fb;
@@ -333,12 +333,12 @@
       <div class="form-section">
         <h3>Google Drive съхранение</h3>
         <label class="label">Google Apps Script URL</label>
-        <input id="googleScriptUrlInput" class="wide-input" value="https://script.google.com/macros/s/AKfycbyf0A7UMudFx-cQo4bRuflEn39erqJ8CH29vZ-fnO3k-ChwS2P1LLKxI9zBC2wPzEgz/exec" placeholder="Постави Web App URL, който завършва на /exec">
+        <input id="googleScriptUrlInput" class="wide-input" value="https://script.google.com/macros/s/AKfycbyf0A7UMudFx-cQo4bRuflEn39erqJ8CH29vZ-fnO3k-ChwS2P1LLKxI9zBC2wPzEgz/exec" placeholder="Постави Google Apps Script URL">
         <div class="settings-actions">
           <button class="btn primary" id="saveGoogleUrlBtn" type="button">Запази URL</button>
           <button class="btn ghost" id="loadGoogleBtn" type="button">Зареди от Google Drive</button>
         </div>
-        <div class="drive-help">URL адресът е вграден предварително. Всяка реална промяна се записва автоматично: първо локално, после към Google Drive. Записът към Google Drive се прави със забавяне от около 1 секунда, за да не се създава backup при всяко отделно натискане.</div>
+        <div class="drive-help">URL адресът е вграден предварително. Всяка реална промяна се записва автоматично: първо локално, после към Google Drive в папка ResCheck. Записът към Google Drive се прави със забавяне от около 1 секунда.</div>
       </div>
       <div class="form-section">
         <h3>Служители</h3>
@@ -379,7 +379,12 @@
   const OLD_STORAGE_KEYS = ['reservation_checks_github_v11_data','reservation_checks_github_v10_data','reservation_checks_github_v9_data','reservation_checks_github_v8_data'];
   const SCRIPT_URL_KEY = 'reservation_checks_google_script_url_v12';
   const DEFAULT_GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyf0A7UMudFx-cQo4bRuflEn39erqJ8CH29vZ-fnO3k-ChwS2P1LLKxI9zBC2wPzEgz/exec';
-  let googleScriptUrl = localStorage.getItem(SCRIPT_URL_KEY) || DEFAULT_GOOGLE_SCRIPT_URL;
+  const storedGoogleScriptUrl = localStorage.getItem(SCRIPT_URL_KEY) || '';
+  let googleScriptUrl = storedGoogleScriptUrl || DEFAULT_GOOGLE_SCRIPT_URL;
+  if (!storedGoogleScriptUrl || storedGoogleScriptUrl.includes('/macros/library/')) {
+    googleScriptUrl = DEFAULT_GOOGLE_SCRIPT_URL;
+    localStorage.setItem(SCRIPT_URL_KEY, DEFAULT_GOOGLE_SCRIPT_URL);
+  }
   let remoteSaveTimer = null;
   let loadingRemote = false;
   let savingRemote = false;
@@ -550,8 +555,8 @@
       singleCalendarMonth = startOfMonth(parseBgDate(selectedDate));
       periodBaseMonth = startOfMonth(parseBgDate(selectedDate));
       renderAll();
-      updateSyncStatus('online', '☁ Google Drive');
-      if (showMessage) showToast('Данните са заредени от Google Drive.');
+      updateSyncStatus('online', '☁ Google Drive / ResCheck');
+      if (showMessage) showToast('Данните са заредени от Google Drive / ResCheck.');
     } catch(e) {
       updateSyncStatus('error', '☁ Грешка');
       if (showMessage !== false) alert('Не успях да заредя от Google Drive.\n' + (e.message || e));
@@ -576,8 +581,8 @@
       try { reply = JSON.parse(text); } catch(e) {}
       if (reply && reply.ok === false) throw new Error(reply.error || 'Грешка при запис.');
       lastRemotePayload = currentPayload;
-      updateSyncStatus('online', '☁ Запазено');
-      if (showMessage) showToast('Данните са записани към Google Drive.');
+      updateSyncStatus('online', '☁ Запазено в ResCheck');
+      if (showMessage) showToast('Данните са записани към Google Drive в папка ResCheck.');
     } catch(e) {
       updateSyncStatus('error', '☁ Грешка');
       if (showMessage !== false) showToast('Неуспешно автоматично записване към Google Drive.');
