@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Дневник проверки на резервации v9</title>
+  <title>Дневник проверки на резервации v11</title>
   <style>
     :root{
       --bg:#f3f6fb;
@@ -336,9 +336,8 @@
         <div class="settings-actions">
           <button class="btn primary" id="saveGoogleUrlBtn" type="button">Запази URL</button>
           <button class="btn ghost" id="loadGoogleBtn" type="button">Зареди от Google Drive</button>
-          <button class="btn ghost" id="saveGoogleBtn" type="button">Запази към Google Drive</button>
         </div>
-        <div class="drive-help">След като поставиш URL, всички промени се записват автоматично и локално, и към Google Drive. Всеки служител трябва да постави същия URL веднъж на своя браузър.</div>
+        <div class="drive-help">След като поставиш URL, всяка реална промяна се записва автоматично: първо локално, после към Google Drive. Записът към Google Drive се прави със забавяне от около 1 секунда, за да не се създава backup при всяко отделно натискане.</div>
       </div>
       <div class="form-section">
         <h3>Служители</h3>
@@ -375,12 +374,15 @@
   const MONTHS = ['Януари','Февруари','Март','Април','Май','Юни','Юли','Август','Септември','Октомври','Ноември','Декември'];
   const DOW = ['П','В','С','Ч','П','С','Н'];
   const dataEl = document.getElementById('app-data');
-  const STORAGE_KEY = 'reservation_checks_github_v9_data';
-  const OLD_STORAGE_KEYS = ['reservation_checks_github_v8_data'];
+  const STORAGE_KEY = 'reservation_checks_github_v11_data';
+  const OLD_STORAGE_KEYS = ['reservation_checks_github_v10_data','reservation_checks_github_v9_data','reservation_checks_github_v8_data'];
   const SCRIPT_URL_KEY = 'reservation_checks_google_script_url';
   let googleScriptUrl = localStorage.getItem(SCRIPT_URL_KEY) || '';
   let remoteSaveTimer = null;
   let loadingRemote = false;
+  let savingRemote = false;
+  let pendingRemoteSave = false;
+  let lastRemotePayload = '';
   let data = safeData();
   if (!data.channels.length) data.channels = ['Booking','Quendoo','TO'];
   let selectedDate = todayBg();
@@ -428,8 +430,7 @@
     syncStatus: document.getElementById('syncStatus'),
     googleScriptUrlInput: document.getElementById('googleScriptUrlInput'),
     saveGoogleUrlBtn: document.getElementById('saveGoogleUrlBtn'),
-    loadGoogleBtn: document.getElementById('loadGoogleBtn'),
-    saveGoogleBtn: document.getElementById('saveGoogleBtn')
+    loadGoogleBtn: document.getElementById('loadGoogleBtn')
   };
 
   document.querySelectorAll('[data-close]').forEach(btn => btn.addEventListener('click', () => closeModal(btn.dataset.close)));
@@ -439,7 +440,6 @@
   document.getElementById('settingsBtn').addEventListener('click', () => { renderSettings(); openModal('settingsModal'); });
   els.saveGoogleUrlBtn.addEventListener('click', saveGoogleUrl);
   els.loadGoogleBtn.addEventListener('click', () => loadRemoteData(true));
-  els.saveGoogleBtn.addEventListener('click', () => saveRemoteData(true));
   document.getElementById('jumpTodayBtn').addEventListener('click', () => { selectedDate = todayBg(); draft.checkDate = selectedDate; singleCalendarMonth = startOfMonth(parseBgDate(selectedDate)); renderAll(); });
   els.checkDateBtn.addEventListener('click', () => { singleCalendarMonth = startOfMonth(parseBgDate(draft.checkDate)); renderSingleCalendar(); openModal('dateModal'); });
   els.periodBtn.addEventListener('click', () => { periodBaseMonth = startOfMonth(parseBgDate(draft.checkDate)); tempPeriodStart = draft.periodStart ? parseBgDate(draft.periodStart) : null; tempPeriodEnd = draft.periodEnd ? parseBgDate(draft.periodEnd) : null; renderPeriodCalendars(); openModal('periodModal'); });
@@ -466,6 +466,7 @@
   els.resetDraftBtn.addEventListener('click', resetDraft);
 
   renderAll();
+  lastRemotePayload = JSON.stringify(data);
   updateSyncStatus();
   if (googleScriptUrl) loadRemoteData(false);
 
@@ -511,11 +512,14 @@
     googleScriptUrl = url;
     if (url) localStorage.setItem(SCRIPT_URL_KEY, url); else localStorage.removeItem(SCRIPT_URL_KEY);
     updateSyncStatus();
-    showToast(url ? 'Google Drive URL е запазен.' : 'Google Drive URL е премахнат.');
+    showToast(url ? 'Google Drive URL е запазен. Автоматичното записване е включено.' : 'Google Drive URL е премахнат.');
+    if (url) scheduleRemoteSave(true);
   }
-  function scheduleRemoteSave(){
+  function scheduleRemoteSave(force){
     clearTimeout(remoteSaveTimer);
-    remoteSaveTimer = setTimeout(() => saveRemoteData(false), 700);
+    const delay = force ? 250 : 1000;
+    remoteSaveTimer = setTimeout(() => saveRemoteData(false, !!force), delay);
+    if (googleScriptUrl) updateSyncStatus('saving', '☁ Ще се запази...');
   }
   async function loadRemoteData(showMessage){
     const url = cleanScriptUrl();
@@ -531,6 +535,7 @@
       data = normalizeData(incoming);
       if (!data.channels.length) data.channels = ['Booking','Quendoo','TO'];
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      lastRemotePayload = JSON.stringify(data);
       selectedDate = data.records.length ? latestRecordDate() : todayBg();
       draft = { checkDate:selectedDate, periodStart:'', periodEnd:'', hotel:HOTELS[0], channel:data.channels[0] || '', result:'ok', finding:'', employee:data.employees[0] || '' };
       singleCalendarMonth = startOfMonth(parseBgDate(selectedDate));
@@ -545,9 +550,14 @@
       loadingRemote = false;
     }
   }
-  async function saveRemoteData(showMessage){
+  async function saveRemoteData(showMessage, force){
     const url = cleanScriptUrl();
     if (!url) { if (showMessage) showToast('Постави Google Apps Script URL в Настройки.'); return; }
+    const currentPayload = JSON.stringify(data);
+    if (!force && currentPayload === lastRemotePayload) { updateSyncStatus('online', '☁ Google Drive'); return; }
+    if (savingRemote) { pendingRemoteSave = true; return; }
+    savingRemote = true;
+    pendingRemoteSave = false;
     updateSyncStatus('saving', '☁ Записване...');
     try {
       const payload = { action:'save', data, savedAt:new Date().toISOString() };
@@ -556,11 +566,18 @@
       let reply = {};
       try { reply = JSON.parse(text); } catch(e) {}
       if (reply && reply.ok === false) throw new Error(reply.error || 'Грешка при запис.');
-      updateSyncStatus('online', '☁ Google Drive');
+      lastRemotePayload = currentPayload;
+      updateSyncStatus('online', '☁ Запазено');
       if (showMessage) showToast('Данните са записани към Google Drive.');
     } catch(e) {
       updateSyncStatus('error', '☁ Грешка');
-      if (showMessage !== false) alert('Не успях да запиша към Google Drive.\n' + (e.message || e));
+      if (showMessage !== false) showToast('Неуспешно автоматично записване към Google Drive.');
+    } finally {
+      savingRemote = false;
+      if (pendingRemoteSave && JSON.stringify(data) !== lastRemotePayload) {
+        pendingRemoteSave = false;
+        scheduleRemoteSave(true);
+      }
     }
   }
   function pad(n){ return String(n).padStart(2,'0'); }
