@@ -224,14 +224,15 @@
             </div>
           </div>
           <div class="form-section">
-            <h3>Хотел и канал</h3>
+            <h3>Хотел и канали</h3>
             <div class="field">
               <label class="label">Хотел</label>
               <div class="button-grid" id="hotelChoices"></div>
             </div>
             <div class="field">
-              <label class="label">Канал</label>
+              <label class="label">Канали</label>
               <div class="button-grid channels" id="channelChoices"></div>
+              <div class="hint">Можеш да избереш няколко канала едновременно.</div>
             </div>
           </div>
           <div class="form-section">
@@ -380,9 +381,8 @@
   const SCRIPT_URL_KEY = 'reservation_checks_google_script_url_v12';
   const DEFAULT_GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyf0A7UMudFx-cQo4bRuflEn39erqJ8CH29vZ-fnO3k-ChwS2P1LLKxI9zBC2wPzEgz/exec';
   const storedGoogleScriptUrl = localStorage.getItem(SCRIPT_URL_KEY) || '';
-  let googleScriptUrl = storedGoogleScriptUrl || DEFAULT_GOOGLE_SCRIPT_URL;
-  if (!storedGoogleScriptUrl || storedGoogleScriptUrl.includes('/macros/library/')) {
-    googleScriptUrl = DEFAULT_GOOGLE_SCRIPT_URL;
+  let googleScriptUrl = DEFAULT_GOOGLE_SCRIPT_URL;
+  if (storedGoogleScriptUrl !== DEFAULT_GOOGLE_SCRIPT_URL) {
     localStorage.setItem(SCRIPT_URL_KEY, DEFAULT_GOOGLE_SCRIPT_URL);
   }
   let remoteSaveTimer = null;
@@ -399,7 +399,7 @@
     periodStart: '',
     periodEnd: '',
     hotel: HOTELS[0],
-    channel: data.channels[0] || '' || '',
+    channels: data.channels.length ? [data.channels[0]] : [],
     result: 'ok',
     finding: '',
     employee: data.employees[0] || ''
@@ -551,7 +551,7 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       lastRemotePayload = JSON.stringify(data);
       selectedDate = data.records.length ? latestRecordDate() : todayBg();
-      draft = { checkDate:selectedDate, periodStart:'', periodEnd:'', hotel:HOTELS[0], channel:data.channels[0] || '', result:'ok', finding:'', employee:data.employees[0] || '' };
+      draft = { checkDate:selectedDate, periodStart:'', periodEnd:'', hotel:HOTELS[0], channels:data.channels.length ? [data.channels[0]] : [], result:'ok', finding:'', employee:data.employees[0] || '' };
       singleCalendarMonth = startOfMonth(parseBgDate(selectedDate));
       periodBaseMonth = startOfMonth(parseBgDate(selectedDate));
       renderAll();
@@ -616,6 +616,11 @@
   function closeModal(id){ document.getElementById(id).classList.remove('show'); }
   function showToast(msg){ els.toast.textContent = msg; els.toast.classList.remove('show'); void els.toast.offsetWidth; els.toast.classList.add('show'); }
   function makeId(){ return 'rec-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8); }
+  function getDraftChannels(){
+    if (Array.isArray(draft.channels)) return draft.channels.filter(Boolean);
+    if (draft.channel) return [draft.channel];
+    return [];
+  }
   function getLatestRecord(checkDate, hotel, channel){
     return data.records
       .filter(r => r.checkDate === checkDate && r.hotel === hotel && r.channel === channel)
@@ -637,11 +642,20 @@
       if (!data.employees.includes(draft.employee)) draft.employee = data.employees[0];
     }
     els.employeeSelect.value = draft.employee;
-    if (!data.channels.includes(draft.channel)) draft.channel = data.channels[0] || '';
+    draft.channels = getDraftChannels();
+    if (!draft.channels.length && data.channels.length) draft.channels = [data.channels[0]];
+    draft.channels = draft.channels.filter(ch => data.channels.includes(ch));
+    if (!draft.channels.length && data.channels.length) draft.channels = [data.channels[0]];
     els.hotelChoices.innerHTML = HOTELS.map(h => `<button type="button" class="choice ${draft.hotel===h?'active':''}" data-hotel="${escapeHtml(h)}">${escapeHtml(h)}</button>`).join('');
-    els.channelChoices.innerHTML = data.channels.map(c => `<button type="button" class="choice ${draft.channel===c?'active':''}" data-channel="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('');
+    els.channelChoices.innerHTML = data.channels.map(c => `<button type="button" class="choice ${draft.channels.includes(c)?'active':''}" data-channel="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('');
     document.querySelectorAll('[data-hotel]').forEach(b => b.addEventListener('click', () => { draft.hotel = b.dataset.hotel; renderDraft(); }));
-    document.querySelectorAll('[data-channel]').forEach(b => b.addEventListener('click', () => { draft.channel = b.dataset.channel; renderDraft(); }));
+    document.querySelectorAll('[data-channel]').forEach(b => b.addEventListener('click', () => {
+      const ch = b.dataset.channel;
+      const current = new Set(getDraftChannels());
+      if (current.has(ch)) current.delete(ch); else current.add(ch);
+      draft.channels = Array.from(current);
+      renderDraft();
+    }));
     document.querySelectorAll('[data-result]').forEach(b => {
       b.classList.toggle('active', draft.result === b.dataset.result);
       b.addEventListener('click', () => { draft.result = b.dataset.result; renderDraft(); });
@@ -657,7 +671,7 @@
     if (!draft.checkDate) missing.push('дата');
     if (!draft.periodStart || !draft.periodEnd) missing.push('период');
     if (!draft.hotel) missing.push('хотел');
-    if (!draft.channel) missing.push('канал');
+    if (!getDraftChannels().length) missing.push('канал');
     if (!draft.employee) missing.push('служител');
     if (draft.result === 'diff' && !String(draft.finding||'').trim()) missing.push('установено');
     els.draftBadge.textContent = missing.length ? 'липсва: ' + missing.join(', ') : (editingRecordId ? 'готов за редакция' : 'готов за запис');
@@ -759,22 +773,23 @@
   function addRecord(){
     draft.finding = els.findingInput.value.trim();
     draft.employee = els.employeeSelect.value;
+    const selectedChannels = getDraftChannels();
     const errors = [];
     if (!draft.checkDate) errors.push('Избери дата на проверката.');
     if (!draft.periodStart || !draft.periodEnd) errors.push('Избери искан период.');
     if (!draft.hotel) errors.push('Избери хотел.');
-    if (!draft.channel) errors.push('Избери канал.');
+    if (!selectedChannels.length) errors.push('Избери поне един канал.');
+    if (editingRecordId && selectedChannels.length !== 1) errors.push('При редакция избери само един канал.');
     if (!draft.employee) errors.push('Избери служител.');
     if (draft.result === 'diff' && !draft.finding) errors.push('При „Има разлики“ попълни какво е установено.');
     if (errors.length) { alert(errors.join('\n')); return; }
 
     const now = new Date().toISOString();
-    const recordData = {
+    const baseRecordData = {
       checkDate: draft.checkDate,
       periodStart: draft.periodStart,
       periodEnd: draft.periodEnd,
       hotel: draft.hotel,
-      channel: draft.channel,
       result: draft.result,
       finding: draft.finding,
       employee: draft.employee
@@ -788,15 +803,18 @@
         resetDraft();
         return;
       }
-      data.records[idx] = { ...data.records[idx], ...recordData, updatedAt: now };
+      data.records[idx] = { ...data.records[idx], ...baseRecordData, channel: selectedChannels[0], updatedAt: now };
       showToast('Записът е обновен.');
     } else {
-      data.records.push({
-        id: makeId(),
-        ...recordData,
-        createdAt: now
+      selectedChannels.forEach(ch => {
+        data.records.push({
+          id: makeId(),
+          ...baseRecordData,
+          channel: ch,
+          createdAt: now
+        });
       });
-      showToast('Записът е добавен.');
+      showToast(selectedChannels.length > 1 ? `Добавени са ${selectedChannels.length} записа.` : 'Записът е добавен.');
     }
 
     selectedDate = draft.checkDate;
@@ -808,7 +826,7 @@
   }
   function resetDraft(){
     editingRecordId = null;
-    draft = { checkDate: selectedDate, periodStart:'', periodEnd:'', hotel:HOTELS[0], channel:data.channels[0] || '', result:'ok', finding:'', employee:data.employees[0]||'' };
+    draft = { checkDate: selectedDate, periodStart:'', periodEnd:'', hotel:HOTELS[0], channels:data.channels.length ? [data.channels[0]] : [], result:'ok', finding:'', employee:data.employees[0]||'' };
     renderDraft();
   }
   function openHotel(hotel){
@@ -841,7 +859,7 @@
       periodStart: record.periodStart || '',
       periodEnd: record.periodEnd || '',
       hotel: record.hotel || HOTELS[0],
-      channel: record.channel || data.channels[0] || '',
+      channels: record.channel ? [record.channel] : (data.channels.length ? [data.channels[0]] : []),
       result: record.result || 'ok',
       finding: record.finding || '',
       employee: record.employee || data.employees[0] || ''
@@ -909,7 +927,7 @@
     if (!name) return;
     if (!data.channels.includes(name)) data.channels.push(name);
     els.channelInput.value = '';
-    if (!draft.channel) draft.channel = name;
+    if (!getDraftChannels().length) draft.channels = [name];
     persistData();
     renderSettings(); renderAll();
   }
@@ -921,7 +939,7 @@
     if (data.channels.includes(clean)) { alert('Вече има канал с това име.'); return; }
     data.channels = data.channels.map(c => c === oldName ? clean : c);
     data.records.forEach(r => { if (r.channel === oldName) r.channel = clean; });
-    if (draft.channel === oldName) draft.channel = clean;
+    draft.channels = getDraftChannels().map(c => c === oldName ? clean : c);
     persistData();
     renderSettings(); renderAll();
   }
@@ -929,7 +947,8 @@
     if (data.channels.length <= 1) { alert('Трябва да остане поне един канал.'); return; }
     if (!confirm(`Да премахна ли канал „${name}“? Старите записи с този канал ще останат в историята, но каналът няма да е активен за нови проверки.`)) return;
     data.channels = data.channels.filter(c => c !== name);
-    if (draft.channel === name) draft.channel = data.channels[0] || '';
+    draft.channels = getDraftChannels().filter(c => c !== name);
+    if (!draft.channels.length && data.channels.length) draft.channels = [data.channels[0]];
     persistData();
     renderSettings(); renderAll();
   }
