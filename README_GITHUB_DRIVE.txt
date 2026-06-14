@@ -5,7 +5,7 @@
 - apps_script_code.gs — постави този код в Google Apps Script проекта
 - .nojekyll — остави го в repository-то
 
-Какво е ново във v24:
+Какво е ново във v25:
 - При отваряне първо се вижда само Login страница.
 - Има Username и Password.
 - Паролата има бутон с око за показване/скриване, докато се пише.
@@ -27,9 +27,9 @@
 5. Не поставяй тези стойности в GitHub.
 
 Вариант 2:
-В apps_script_code.gs попълни празните константи:
-AUTH_USERNAME
-AUTH_PASSWORD
+В apps_script_code.gs промени fallback стойностите във функциите:
+getDefaultUsername_()
+getDefaultPassword_()
 
 След промяна на Apps Script:
 Deploy > Manage deployments > Edit > New version > Deploy
@@ -49,6 +49,7 @@ Google Drive:
 https://script.google.com/macros/s/AKfycbyf0A7UMudFx-cQo4bRuflEn39erqJ8CH29vZ-fnO3k-ChwS2P1LLKxI9zBC2wPzEgz/exec
 
 
-V24:
-- Login данните са зададени в apps_script_code.gs и не се показват в HTML интерфейса.
+V25:
+- Поправена е грешката AUTH_USERNAME is not defined.
+- Login данните са зададени в apps_script_code.gs чрез fallback функции и не се показват в HTML интерфейса.
 - След смяна на Apps Script кода направи New version → Deploy.
