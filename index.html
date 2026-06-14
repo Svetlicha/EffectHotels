@@ -568,23 +568,27 @@
       const res = await fetch(url, {
         method:'POST',
         headers:{'Content-Type':'text/plain;charset=utf-8'},
-        body:JSON.stringify({ action:'login', username, password }),
+        body:JSON.stringify({ action:'login', username, password, fast:true }),
         redirect:'follow'
       });
       const payload = await res.json();
       if (!payload || payload.ok === false) throw new Error(payload && payload.error ? payload.error : 'Грешен вход.');
       authToken = payload.token || '';
       if (!authToken) throw new Error('Скриптът не върна сесия за вход.');
-      data = normalizeData(payload.data || {});
-      if (!data.channels.length) data.channels = ['Booking','Quendoo','TO'];
-      selectedDate = data.records.length ? latestRecordDate() : todayBg();
-      draft = { checkDate:selectedDate, periodStart:'', periodEnd:'', hotel:HOTELS[0], channels:data.channels.length ? [data.channels[0]] : [], result:'ok', finding:'', employee:data.employees[0] || '' };
+
+      // Бърз вход: показваме приложението веднага, без да чакаме Google Drive файла.
+      // Данните се зареждат отделно веднага след това.
+      data = normalizeData({});
+      data.channels = ['Booking','Quendoo','TO'];
+      selectedDate = todayBg();
+      draft = { checkDate:selectedDate, periodStart:'', periodEnd:'', hotel:HOTELS[0], channels:data.channels.length ? [data.channels[0]] : [], result:'ok', finding:'', employee:'' };
       singleCalendarMonth = startOfMonth(parseBgDate(selectedDate));
       periodBaseMonth = startOfMonth(parseBgDate(selectedDate));
       lastRemotePayload = JSON.stringify(data);
       showApp();
       renderAll();
-      updateSyncStatus('online', '☁ Google Drive / ResCheck');
+      updateSyncStatus('saving', '☁ Влязохте. Зареждане от ResCheck...');
+      setTimeout(() => loadRemoteData(false), 50);
     } catch(e) {
       authToken = '';
       els.loginError.textContent = e.message || 'Неуспешен вход.';
