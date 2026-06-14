@@ -5,7 +5,7 @@
 - apps_script_code.gs — постави този код в Google Apps Script проекта
 - .nojekyll — остави го в repository-то
 
-Какво е ново във v25:
+Какво е ново във v26:
 - При отваряне първо се вижда само Login страница.
 - Има Username и Password.
 - Паролата има бутон с око за показване/скриване, докато се пише.
@@ -53,3 +53,10 @@ V25:
 - Поправена е грешката AUTH_USERNAME is not defined.
 - Login данните са зададени в apps_script_code.gs чрез fallback функции и не се показват в HTML интерфейса.
 - След смяна на Apps Script кода направи New version → Deploy.
+
+
+V26 FAST LOGIN:
+- Login вече не чака четене на JSON файла от Google Drive.
+- След успешна проверка на Username/Password приложението се показва веднага.
+- Данните от папка ResCheck се зареждат веднага след това.
+- Данните пак не се пазят в браузъра/localStorage.
