@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Дневник проверки на резервации v16</title>
+  <title>Дневник проверки на резервации v24</title>
   <style>
     :root{
       --bg:#f3f6fb;
@@ -176,10 +176,50 @@
     .drive-help{background:var(--accent-soft);border:1px solid #d5dfff;color:var(--accent-dark);border-radius:14px;padding:12px 14px;font-size:13px;line-height:1.45;margin-top:12px;font-weight:700}
     @keyframes fadeToast{0%{opacity:0;transform:translateY(10px)}15%,80%{opacity:1;transform:none}100%{opacity:0;transform:translateY(10px)}}
     @media(max-width:1100px){.form-grid{grid-template-columns:1fr}.main-grid{grid-template-columns:1fr}.checks-list{max-height:none}.hotel-grid{grid-template-columns:1fr}}
+
+    [hidden]{display:none!important}
+    .login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:22px;background:linear-gradient(135deg,#edf3ff 0%,#f7fafc 48%,#eef7f2 100%)}
+    .login-card{width:min(440px,100%);background:rgba(255,255,255,.96);border:1px solid rgba(219,227,239,.95);border-radius:28px;box-shadow:0 26px 70px rgba(20,32,51,.16);padding:28px}
+    .login-logo{width:54px;height:54px;border-radius:18px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:950;margin-bottom:16px;box-shadow:0 14px 26px rgba(33,86,217,.22)}
+    .login-card h1{margin:0 0 6px;font-size:28px;letter-spacing:-.03em;color:var(--text)}
+    .login-card p{margin:0 0 20px;color:var(--muted);font-weight:750;line-height:1.45}
+    .login-field{margin:14px 0}
+    .login-input{width:100%;height:52px;border:1px solid var(--line);border-radius:16px;padding:0 14px;outline:none;font-size:16px;font-weight:800;color:var(--text);background:#fff}
+    .login-input:focus{border-color:#91a9e8;box-shadow:0 0 0 4px rgba(33,86,217,.10)}
+    .password-wrap{position:relative}
+    .password-wrap .login-input{padding-right:56px}
+    .eye-btn{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:40px;height:40px;border:0;border-radius:12px;background:var(--surface-soft);cursor:pointer;font-size:18px;color:var(--muted)}
+    .eye-btn:hover{background:var(--accent-soft);color:var(--accent)}
+    .login-error{min-height:22px;color:var(--diff);font-weight:850;font-size:13px;margin-top:10px;line-height:1.35}
+    .login-actions{display:flex;gap:10px;align-items:center;margin-top:16px}
+    .logout-btn{white-space:nowrap}
+
     @media(max-width:720px){.app{padding:12px}.topbar{align-items:flex-start;flex-direction:column;border-radius:20px}.top-actions{width:100%;justify-content:stretch}.top-actions .btn{flex:1;justify-content:center}.new-body,.dashboard,.modal-body{padding:14px}.button-grid,.button-grid.channels{grid-template-columns:1fr}.selected-date{font-size:24px}.period-calendars{grid-template-columns:1fr}.modal{border-radius:20px}.channel-row{grid-template-columns:1fr;gap:5px}.hotel-title{align-items:flex-start;flex-direction:column}}
   </style>
 </head>
 <body>
+<div class="login-screen" id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">✓</div>
+    <h1>Вход</h1>
+    <p>Дневник проверки · резервационен отдел</p>
+    <div class="login-field">
+      <label class="label" for="loginUsername">Username</label>
+      <input class="login-input" id="loginUsername" autocomplete="username" inputmode="text" autofocus>
+    </div>
+    <div class="login-field">
+      <label class="label" for="loginPassword">Password</label>
+      <div class="password-wrap">
+        <input class="login-input" id="loginPassword" type="password" autocomplete="current-password">
+        <button class="eye-btn" id="togglePasswordBtn" type="button" title="Покажи/скрий паролата">👁</button>
+      </div>
+    </div>
+    <div class="login-actions">
+      <button class="btn primary" id="loginBtn" type="button" style="width:100%;justify-content:center">Вход</button>
+    </div>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
 <script id="app-data" type="application/json">{
   "employees": [],
   "channels": [
@@ -189,7 +229,7 @@
   ],
   "records": []
 }</script>
-<div class="app">
+<div class="app" id="mainApp" hidden>
   <header class="topbar">
     <div class="brand">
       <div class="brand-icon">✓</div>
@@ -199,8 +239,9 @@
       </div>
     </div>
     <div class="top-actions">
-      <span class="sync-status" id="syncStatus">☁ Google Drive</span>
+      <span class="sync-status" id="syncStatus">☁ Локално</span>
       <button class="btn ghost" id="settingsBtn">⚙ Настройки</button>
+      <button class="btn ghost logout-btn" id="logoutBtn" type="button">Изход</button>
     </div>
   </header>
 
@@ -344,7 +385,7 @@
           <button class="btn primary" id="saveGoogleUrlBtn" type="button">Запази URL</button>
           <button class="btn ghost" id="loadGoogleBtn" type="button">Зареди от Google Drive</button>
         </div>
-        <div class="drive-help">URL адресът е вграден предварително. Данните не се пазят в браузъра. Всяка реална промяна се записва автоматично към Google Drive в папка ResCheck със забавяне от около 1 секунда.</div>
+        <div class="drive-help">URL адресът е вграден предварително. След вход всяка реална промяна се записва автоматично към Google Drive в папка ResCheck. Записът към Google Drive се прави със забавяне от около 1 секунда.</div>
       </div>
       <div class="form-section">
         <h3>Служители</h3>
@@ -381,12 +422,9 @@
   const MONTHS = ['Януари','Февруари','Март','Април','Май','Юни','Юли','Август','Септември','Октомври','Ноември','Декември'];
   const DOW = ['П','В','С','Ч','П','С','Н'];
   const dataEl = document.getElementById('app-data');
-  const STORAGE_KEY = 'reservation_checks_github_v12_data';
-  const OLD_STORAGE_KEYS = ['reservation_checks_github_v11_data','reservation_checks_github_v10_data','reservation_checks_github_v9_data','reservation_checks_github_v8_data'];
-  const SCRIPT_URL_KEY = 'reservation_checks_google_script_url_v12';
   const DEFAULT_GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyf0A7UMudFx-cQo4bRuflEn39erqJ8CH29vZ-fnO3k-ChwS2P1LLKxI9zBC2wPzEgz/exec';
   let googleScriptUrl = DEFAULT_GOOGLE_SCRIPT_URL;
-  clearBrowserCacheKeys();
+  let authToken = '';
   let remoteSaveTimer = null;
   let loadingRemote = false;
   let savingRemote = false;
@@ -442,7 +480,15 @@
     syncStatus: document.getElementById('syncStatus'),
     googleScriptUrlInput: document.getElementById('googleScriptUrlInput'),
     saveGoogleUrlBtn: document.getElementById('saveGoogleUrlBtn'),
-    loadGoogleBtn: document.getElementById('loadGoogleBtn')
+    loadGoogleBtn: document.getElementById('loadGoogleBtn'),
+    loginScreen: document.getElementById('loginScreen'),
+    mainApp: document.getElementById('mainApp'),
+    loginUsername: document.getElementById('loginUsername'),
+    loginPassword: document.getElementById('loginPassword'),
+    loginBtn: document.getElementById('loginBtn'),
+    loginError: document.getElementById('loginError'),
+    togglePasswordBtn: document.getElementById('togglePasswordBtn'),
+    logoutBtn: document.getElementById('logoutBtn')
   };
 
   document.querySelectorAll('[data-close]').forEach(btn => btn.addEventListener('click', () => closeModal(btn.dataset.close)));
@@ -476,17 +522,94 @@
   els.findingInput.addEventListener('input', () => { draft.finding = els.findingInput.value; renderDraftBadge(); });
   els.addRecordBtn.addEventListener('click', addRecord);
   els.resetDraftBtn.addEventListener('click', resetDraft);
+  els.loginBtn.addEventListener('click', loginUser);
+  els.loginUsername.addEventListener('keydown', e => { if (e.key === 'Enter') loginUser(); });
+  els.loginPassword.addEventListener('keydown', e => { if (e.key === 'Enter') loginUser(); });
+  els.togglePasswordBtn.addEventListener('click', togglePasswordVisibility);
+  els.logoutBtn.addEventListener('click', logoutUser);
 
-  renderAll();
-  lastRemotePayload = JSON.stringify(data);
-  updateSyncStatus();
-  if (googleScriptUrl) loadRemoteData(false);
+  showLogin();
+  updateSyncStatus('saving', '☁ Изисква вход');
 
-  function clearBrowserCacheKeys(){
+  function showLogin(){
+    authToken = '';
+    els.mainApp.hidden = true;
+    els.loginScreen.hidden = false;
+    els.loginError.textContent = '';
+    els.loginPassword.value = '';
+    setTimeout(() => els.loginUsername.focus(), 50);
+  }
+  function showApp(){
+    els.loginScreen.hidden = true;
+    els.mainApp.hidden = false;
+  }
+  function togglePasswordVisibility(){
+    const isPassword = els.loginPassword.type === 'password';
+    els.loginPassword.type = isPassword ? 'text' : 'password';
+    els.togglePasswordBtn.textContent = isPassword ? '🙈' : '👁';
+    els.loginPassword.focus();
+  }
+  async function loginUser(){
+    const username = els.loginUsername.value.trim();
+    const password = els.loginPassword.value;
+    els.loginError.textContent = '';
+    if (!username || !password) {
+      els.loginError.textContent = 'Попълни Username и Password.';
+      return;
+    }
+    const url = cleanScriptUrl();
+    if (!url) {
+      els.loginError.textContent = 'Липсва Google Apps Script URL.';
+      return;
+    }
+    els.loginBtn.disabled = true;
+    els.loginBtn.textContent = 'Влизане...';
     try {
-      const keys = [STORAGE_KEY, SCRIPT_URL_KEY].concat(OLD_STORAGE_KEYS || []);
-      keys.forEach(key => localStorage.removeItem(key));
-    } catch(e) {}
+      const res = await fetch(url, {
+        method:'POST',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body:JSON.stringify({ action:'login', username, password }),
+        redirect:'follow'
+      });
+      const payload = await res.json();
+      if (!payload || payload.ok === false) throw new Error(payload && payload.error ? payload.error : 'Грешен вход.');
+      authToken = payload.token || '';
+      if (!authToken) throw new Error('Скриптът не върна сесия за вход.');
+      data = normalizeData(payload.data || {});
+      if (!data.channels.length) data.channels = ['Booking','Quendoo','TO'];
+      selectedDate = data.records.length ? latestRecordDate() : todayBg();
+      draft = { checkDate:selectedDate, periodStart:'', periodEnd:'', hotel:HOTELS[0], channels:data.channels.length ? [data.channels[0]] : [], result:'ok', finding:'', employee:data.employees[0] || '' };
+      singleCalendarMonth = startOfMonth(parseBgDate(selectedDate));
+      periodBaseMonth = startOfMonth(parseBgDate(selectedDate));
+      lastRemotePayload = JSON.stringify(data);
+      showApp();
+      renderAll();
+      updateSyncStatus('online', '☁ Google Drive / ResCheck');
+    } catch(e) {
+      authToken = '';
+      els.loginError.textContent = e.message || 'Неуспешен вход.';
+      updateSyncStatus('error', '☁ Грешка');
+    } finally {
+      els.loginBtn.disabled = false;
+      els.loginBtn.textContent = 'Вход';
+    }
+  }
+  async function logoutUser(){
+    const token = authToken;
+    authToken = '';
+    if (token && googleScriptUrl) {
+      try {
+        await fetch(cleanScriptUrl(), {
+          method:'POST',
+          headers:{'Content-Type':'text/plain;charset=utf-8'},
+          body:JSON.stringify({ action:'logout', token }),
+          redirect:'follow'
+        });
+      } catch(e) {}
+    }
+    document.querySelectorAll('.modal-backdrop.show').forEach(m => closeModal(m.id));
+    showLogin();
+    updateSyncStatus('saving', '☁ Изисква вход');
   }
   function safeData(){
     try {
@@ -503,7 +626,7 @@
     };
   }
   function persistData(){
-    if (!loadingRemote && googleScriptUrl) scheduleRemoteSave();
+    if (!loadingRemote && googleScriptUrl && authToken) scheduleRemoteSave();
   }
   function cleanScriptUrl(){ return String(googleScriptUrl || '').trim(); }
   function updateSyncStatus(state, message){
@@ -511,18 +634,16 @@
     els.syncStatus.classList.remove('online','saving','error');
     if (state) els.syncStatus.classList.add(state);
     if (message) { els.syncStatus.textContent = message; return; }
-    if (!googleScriptUrl) els.syncStatus.textContent = '☁ Няма Google URL';
+    if (!googleScriptUrl) els.syncStatus.textContent = '☁ Локално';
     else els.syncStatus.textContent = '☁ Google Drive';
     if (googleScriptUrl) els.syncStatus.classList.add('online');
   }
   function saveGoogleUrl(){
     const url = els.googleScriptUrlInput.value.trim();
     googleScriptUrl = url || DEFAULT_GOOGLE_SCRIPT_URL;
-    els.googleScriptUrlInput.value = googleScriptUrl;
-    clearBrowserCacheKeys();
-    updateSyncStatus();
-    showToast('Google Drive URL е активен само за тази версия. Нищо не се пази в браузъра.');
-    if (googleScriptUrl) scheduleRemoteSave(true);
+    updateSyncStatus(authToken ? 'online' : 'saving', authToken ? '☁ Google Drive' : '☁ Изисква вход');
+    showToast('URL адресът е обновен за текущата сесия.');
+    if (authToken) scheduleRemoteSave(true);
   }
   function scheduleRemoteSave(force){
     clearTimeout(remoteSaveTimer);
@@ -536,14 +657,14 @@
     loadingRemote = true;
     updateSyncStatus('saving', '☁ Зареждане...');
     try {
+      if (!authToken) { showLogin(); throw new Error('Не сте влезли.'); }
       const sep = url.includes('?') ? '&' : '?';
-      const res = await fetch(url + sep + 'action=load&ts=' + Date.now(), { method:'GET', cache:'no-store', redirect:'follow' });
+      const res = await fetch(url + sep + 'action=load&token=' + encodeURIComponent(authToken) + '&ts=' + Date.now(), { method:'GET', cache:'no-store', redirect:'follow' });
       const payload = await res.json();
       if (!payload || payload.ok === false) throw new Error(payload && payload.error ? payload.error : 'Няма валиден отговор от скрипта.');
       const incoming = payload.data || payload;
       data = normalizeData(incoming);
       if (!data.channels.length) data.channels = ['Booking','Quendoo','TO'];
-      clearBrowserCacheKeys();
       lastRemotePayload = JSON.stringify(data);
       selectedDate = data.records.length ? latestRecordDate() : todayBg();
       draft = { checkDate:selectedDate, periodStart:'', periodEnd:'', hotel:HOTELS[0], channels:data.channels.length ? [data.channels[0]] : [], result:'ok', finding:'', employee:data.employees[0] || '' };
@@ -569,7 +690,8 @@
     pendingRemoteSave = false;
     updateSyncStatus('saving', '☁ Записване...');
     try {
-      const payload = { action:'save', data, savedAt:new Date().toISOString() };
+      if (!authToken) { showLogin(); throw new Error('Не сте влезли.'); }
+      const payload = { action:'save', token:authToken, data, savedAt:new Date().toISOString() };
       const res = await fetch(url, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload), redirect:'follow' });
       const text = await res.text();
       let reply = {};
