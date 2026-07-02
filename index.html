@@ -190,6 +190,8 @@
     .password-wrap .login-input{padding-right:56px}
     .eye-btn{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:40px;height:40px;border:0;border-radius:12px;background:var(--surface-soft);cursor:pointer;font-size:18px;color:var(--muted)}
     .eye-btn:hover{background:var(--accent-soft);color:var(--accent)}
+    .remember-login{display:flex;align-items:center;gap:10px;margin:12px 0 0;color:var(--muted);font-size:14px;font-weight:850;cursor:pointer;user-select:none}
+    .remember-login input{width:18px;height:18px;accent-color:var(--accent);cursor:pointer}
     .login-error{min-height:22px;color:var(--diff);font-weight:850;font-size:13px;margin-top:10px;line-height:1.35}
     .login-actions{display:flex;gap:10px;align-items:center;margin-top:16px}
     .logout-btn{white-space:nowrap}
@@ -214,6 +216,10 @@
         <button class="eye-btn" id="togglePasswordBtn" type="button" title="Покажи/скрий паролата">👁</button>
       </div>
     </div>
+    <label class="remember-login">
+      <input id="rememberLogin" type="checkbox">
+      <span>Запомни ме на този компютър</span>
+    </label>
     <div class="login-actions">
       <button class="btn primary" id="loginBtn" type="button" style="width:100%;justify-content:center">Вход</button>
     </div>
@@ -423,6 +429,8 @@
   const DOW = ['П','В','С','Ч','П','С','Н'];
   const dataEl = document.getElementById('app-data');
   const DEFAULT_GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyf0A7UMudFx-cQo4bRuflEn39erqJ8CH29vZ-fnO3k-ChwS2P1LLKxI9zBC2wPzEgz/exec';
+  const REMEMBER_LOGIN_KEY = 'rescheckRememberedLogin';
+  const CLIENT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
   let googleScriptUrl = DEFAULT_GOOGLE_SCRIPT_URL;
   let authToken = '';
   let remoteSaveTimer = null;
@@ -489,6 +497,7 @@
     loginPassword: document.getElementById('loginPassword'),
     loginBtn: document.getElementById('loginBtn'),
     loginError: document.getElementById('loginError'),
+    rememberLogin: document.getElementById('rememberLogin'),
     togglePasswordBtn: document.getElementById('togglePasswordBtn'),
     logoutBtn: document.getElementById('logoutBtn')
   };
@@ -530,10 +539,10 @@
   els.togglePasswordBtn.addEventListener('click', togglePasswordVisibility);
   els.logoutBtn.addEventListener('click', logoutUser);
 
-  showLogin();
-  updateSyncStatus('saving', '☁ Изисква вход');
+  restoreRememberedLogin();
 
   function showLogin(){
+    const saved = getRememberedLogin();
     authToken = '';
     remoteLoadCompleted = false;
     loginInProgress = false;
@@ -542,6 +551,8 @@
     els.loginScreen.hidden = false;
     els.loginError.textContent = '';
     els.loginPassword.value = '';
+    if (saved && saved.username) els.loginUsername.value = saved.username;
+    els.rememberLogin.checked = !!saved;
     setTimeout(() => els.loginUsername.focus(), 50);
   }
   function showApp(){
@@ -583,6 +594,8 @@
       authToken = payload.token || '';
       if (!authToken) throw new Error('Скриптът не върна сесия за вход.');
       remoteLoadCompleted = false;
+      if (els.rememberLogin.checked) rememberLoginSession(username, authToken, payload.expiresAt);
+      else clearRememberedLogin();
 
       // Подготвяме празен екран само като резервен вариант, ако Google Drive не отговори.
       data = normalizeData({});
@@ -615,6 +628,7 @@
   async function logoutUser(){
     const token = authToken;
     authToken = '';
+    clearRememberedLogin();
     if (token && googleScriptUrl) {
       try {
         await fetch(cleanScriptUrl(), {
@@ -636,12 +650,71 @@
     } catch(e) { return {employees:[],channels:[],records:[]}; }
   }
   function normalizeData(parsed){
-    const records = Array.isArray(parsed.records) ? parsed.records.map(r => ({ ...r, id: r && r.id ? r.id : makeId() })) : [];
+    const records = Array.isArray(parsed.records) ? parsed.records.map(r => ({
+      ...r,
+      id: r && r.id ? r.id : makeId(),
+      checkDate: normalizeDateText(r && r.checkDate),
+      periodStart: normalizeDateText(r && r.periodStart),
+      periodEnd: normalizeDateText(r && r.periodEnd)
+    })) : [];
     return {
       employees: Array.isArray(parsed.employees) ? parsed.employees : [],
       channels: Array.isArray(parsed.channels) ? parsed.channels : [],
       records
     };
+  }
+  function getRememberedLogin(){
+    try {
+      const saved = JSON.parse(localStorage.getItem(REMEMBER_LOGIN_KEY) || 'null');
+      if (!saved || !saved.token || !saved.expiresAt) return null;
+      if (new Date(saved.expiresAt).getTime() <= Date.now()) {
+        clearRememberedLogin();
+        return null;
+      }
+      return saved;
+    } catch(e) {
+      return null;
+    }
+  }
+  function rememberLoginSession(username, token, expiresAt){
+    const fallbackExpiry = new Date(Date.now() + CLIENT_SESSION_TTL_MS).toISOString();
+    try {
+      localStorage.setItem(REMEMBER_LOGIN_KEY, JSON.stringify({
+        username,
+        token,
+        expiresAt: expiresAt || fallbackExpiry
+      }));
+    } catch(e) {}
+  }
+  function clearRememberedLogin(){
+    try { localStorage.removeItem(REMEMBER_LOGIN_KEY); } catch(e) {}
+  }
+  async function restoreRememberedLogin(){
+    const saved = getRememberedLogin();
+    if (!saved) {
+      showLogin();
+      updateSyncStatus('saving', '☁ Изисква вход');
+      return;
+    }
+    authToken = saved.token;
+    remoteLoadCompleted = false;
+    els.rememberLogin.checked = true;
+    els.loginUsername.value = saved.username || '';
+    els.loginBtn.disabled = true;
+    els.loginBtn.textContent = 'Зареждане...';
+    updateSyncStatus('saving', '☁ Зареждане от запомнен вход...');
+    const loaded = await loadRemoteData('remember');
+    els.loginBtn.disabled = false;
+    els.loginBtn.textContent = 'Вход';
+    if (loaded) {
+      rememberLoginSession(saved.username || '', authToken, new Date(Date.now() + CLIENT_SESSION_TTL_MS).toISOString());
+      showApp();
+    } else {
+      clearRememberedLogin();
+      showLogin();
+      els.loginError.textContent = 'Сесията е изтекла. Влез отново.';
+      updateSyncStatus('saving', '☁ Изисква вход');
+    }
   }
   function persistData(){
     if (!loadingRemote && googleScriptUrl && authToken && remoteLoadCompleted) scheduleRemoteSave();
@@ -751,11 +824,17 @@
   }
   function pad(n){ return String(n).padStart(2,'0'); }
   function todayBg(){ return formatBgDate(new Date()); }
-  function formatBgDate(d){ return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`; }
+  function formatBgDate(d){ return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()}`; }
   function parseBgDate(s){
-    const parts = String(s || '').split('/').map(Number);
+    const value = String(s || '').trim();
+    const parts = value.split(/[./-]/).map(Number);
     if (parts.length !== 3 || parts.some(isNaN)) return new Date();
+    if (String(parts[0]).length === 4) return new Date(parts[0], parts[1]-1, parts[2]);
     return new Date(parts[2], parts[1]-1, parts[0]);
+  }
+  function normalizeDateText(s){
+    const value = String(s || '').trim();
+    return value ? formatBgDate(parseBgDate(value)) : '';
   }
   function dayMonth(s){ const d = parseBgDate(s); return `${pad(d.getDate())}.${pad(d.getMonth()+1)}`; }
   function monthKey(s){ const d = parseBgDate(s); return `${d.getFullYear()}-${pad(d.getMonth()+1)}`; }
