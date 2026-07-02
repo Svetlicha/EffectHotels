@@ -48,6 +48,13 @@ Google Drive:
 Вграденият Web App URL в index.html е:
 https://script.google.com/macros/s/AKfycbyf0A7UMudFx-cQo4bRuflEn39erqJ8CH29vZ-fnO3k-ChwS2P1LLKxI9zBC2wPzEgz/exec
 
+V28:
+- Датите в приложението вече се показват и записват във формат 11.06.2026.
+- Старите записи с формат 11/06/2026 се разчитат автоматично.
+- Login страницата има отметка "Запомни ме на този компютър".
+- При отметка се пази само login сесията и потребителското име в браузъра, не и паролата.
+- Сесията за запомняне е удължена до 30 дни. За това трябва New version → Deploy и в Google Apps Script.
+
 
 V25:
 - Поправена е грешката AUTH_USERNAME is not defined.
