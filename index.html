@@ -429,6 +429,8 @@
   let loadingRemote = false;
   let savingRemote = false;
   let pendingRemoteSave = false;
+  let remoteLoadCompleted = false;
+  let loginInProgress = false;
   let lastRemotePayload = '';
   let data = safeData();
   if (!data.channels.length) data.channels = ['Booking','Quendoo','TO'];
@@ -533,6 +535,9 @@
 
   function showLogin(){
     authToken = '';
+    remoteLoadCompleted = false;
+    loginInProgress = false;
+    clearTimeout(remoteSaveTimer);
     els.mainApp.hidden = true;
     els.loginScreen.hidden = false;
     els.loginError.textContent = '';
@@ -550,6 +555,7 @@
     els.loginPassword.focus();
   }
   async function loginUser(){
+    if (loginInProgress) return;
     const username = els.loginUsername.value.trim();
     const password = els.loginPassword.value;
     els.loginError.textContent = '';
@@ -562,6 +568,7 @@
       els.loginError.textContent = 'Липсва Google Apps Script URL.';
       return;
     }
+    loginInProgress = true;
     els.loginBtn.disabled = true;
     els.loginBtn.textContent = 'Влизане...';
     try {
@@ -575,9 +582,9 @@
       if (!payload || payload.ok === false) throw new Error(payload && payload.error ? payload.error : 'Грешен вход.');
       authToken = payload.token || '';
       if (!authToken) throw new Error('Скриптът не върна сесия за вход.');
+      remoteLoadCompleted = false;
 
-      // Бърз вход: показваме приложението веднага, без да чакаме Google Drive файла.
-      // Данните се зареждат отделно веднага след това.
+      // Подготвяме празен екран само като резервен вариант, ако Google Drive не отговори.
       data = normalizeData({});
       data.channels = ['Booking','Quendoo','TO'];
       selectedDate = todayBg();
@@ -585,15 +592,22 @@
       singleCalendarMonth = startOfMonth(parseBgDate(selectedDate));
       periodBaseMonth = startOfMonth(parseBgDate(selectedDate));
       lastRemotePayload = JSON.stringify(data);
-      showApp();
-      renderAll();
       updateSyncStatus('saving', '☁ Влязохте. Зареждане от ResCheck...');
-      setTimeout(() => loadRemoteData(false), 50);
+      els.loginBtn.textContent = 'Зареждане...';
+
+      const loaded = await loadRemoteData('login');
+      showApp();
+      if (!loaded) {
+        renderAll();
+        showToast('Не успях да заредя автоматично. Отвори Настройки и натисни „Зареди от Google Drive“.');
+      }
     } catch(e) {
       authToken = '';
+      remoteLoadCompleted = false;
       els.loginError.textContent = e.message || 'Неуспешен вход.';
       updateSyncStatus('error', '☁ Грешка');
     } finally {
+      loginInProgress = false;
       els.loginBtn.disabled = false;
       els.loginBtn.textContent = 'Вход';
     }
@@ -630,7 +644,11 @@
     };
   }
   function persistData(){
-    if (!loadingRemote && googleScriptUrl && authToken) scheduleRemoteSave();
+    if (!loadingRemote && googleScriptUrl && authToken && remoteLoadCompleted) scheduleRemoteSave();
+    else if (authToken && googleScriptUrl && !remoteLoadCompleted) {
+      updateSyncStatus('error', '☁ Зареди от Google първо');
+      showToast('Първо зареди данните от Google Drive, за да не се презапише файлът.');
+    }
   }
   function cleanScriptUrl(){ return String(googleScriptUrl || '').trim(); }
   function updateSyncStatus(state, message){
@@ -647,7 +665,7 @@
     googleScriptUrl = url || DEFAULT_GOOGLE_SCRIPT_URL;
     updateSyncStatus(authToken ? 'online' : 'saving', authToken ? '☁ Google Drive' : '☁ Изисква вход');
     showToast('URL адресът е обновен за текущата сесия.');
-    if (authToken) scheduleRemoteSave(true);
+    if (authToken) loadRemoteData(true);
   }
   function scheduleRemoteSave(force){
     clearTimeout(remoteSaveTimer);
@@ -657,13 +675,19 @@
   }
   async function loadRemoteData(showMessage){
     const url = cleanScriptUrl();
-    if (!url) { showToast('Постави Google Apps Script URL в Настройки.'); return; }
+    if (!url) { showToast('Постави Google Apps Script URL в Настройки.'); return false; }
+    clearTimeout(remoteSaveTimer);
     loadingRemote = true;
     updateSyncStatus('saving', '☁ Зареждане...');
     try {
       if (!authToken) { showLogin(); throw new Error('Не сте влезли.'); }
-      const sep = url.includes('?') ? '&' : '?';
-      const res = await fetch(url + sep + 'action=load&token=' + encodeURIComponent(authToken) + '&ts=' + Date.now(), { method:'GET', cache:'no-store', redirect:'follow' });
+      const res = await fetch(url, {
+        method:'POST',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body:JSON.stringify({ action:'load', token:authToken, ts:Date.now() }),
+        cache:'no-store',
+        redirect:'follow'
+      });
       const payload = await res.json();
       if (!payload || payload.ok === false) throw new Error(payload && payload.error ? payload.error : 'Няма валиден отговор от скрипта.');
       const incoming = payload.data || payload;
@@ -676,10 +700,15 @@
       periodBaseMonth = startOfMonth(parseBgDate(selectedDate));
       renderAll();
       updateSyncStatus('online', '☁ Google Drive / ResCheck');
-      if (showMessage) showToast('Данните са заредени от Google Drive / ResCheck.');
+      if (showMessage === true || showMessage === 'auto') showToast('Данните са заредени от Google Drive / ResCheck.');
+      remoteLoadCompleted = true;
+      return true;
     } catch(e) {
+      remoteLoadCompleted = false;
       updateSyncStatus('error', '☁ Грешка');
-      if (showMessage !== false) alert('Не успях да заредя от Google Drive.\n' + (e.message || e));
+      if (showMessage === true) alert('Не успях да заредя от Google Drive.\n' + (e.message || e));
+      else if (showMessage === 'auto') showToast('Не успях да заредя от Google Drive. Натисни „Зареди от Google Drive“ от Настройки.');
+      return false;
     } finally {
       loadingRemote = false;
     }
@@ -687,6 +716,11 @@
   async function saveRemoteData(showMessage, force){
     const url = cleanScriptUrl();
     if (!url) { if (showMessage) showToast('Постави Google Apps Script URL в Настройки.'); return; }
+    if (!remoteLoadCompleted) {
+      updateSyncStatus('error', '☁ Зареди от Google първо');
+      if (showMessage !== false) showToast('Първо зареди данните от Google Drive, за да не се презапише файлът.');
+      return;
+    }
     const currentPayload = JSON.stringify(data);
     if (!force && currentPayload === lastRemotePayload) { updateSyncStatus('online', '☁ Google Drive'); return; }
     if (savingRemote) { pendingRemoteSave = true; return; }
