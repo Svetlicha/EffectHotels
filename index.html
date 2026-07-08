@@ -163,6 +163,13 @@
     .employee-list{display:flex;flex-wrap:wrap;gap:8px}
     .employee-token{display:inline-flex;align-items:center;gap:8px;background:var(--accent-soft);color:var(--accent-dark);font-weight:900;border-radius:999px;padding:8px 10px}
     .employee-token button{border:0;background:rgba(33,86,217,.12);border-radius:999px;color:var(--accent-dark);font-weight:950;width:22px;height:22px}
+    .hotel-channel-settings{display:grid;gap:14px}
+    .hotel-channel-card{border:1px solid var(--line);border-radius:16px;background:var(--surface-soft);padding:14px}
+    .hotel-channel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+    .hotel-channel-head strong{font-size:15px}
+    .hotel-channel-head span{color:var(--muted);font-size:12px;font-weight:900}
+    .hotel-channel-add{display:grid;grid-template-columns:1fr auto;gap:10px;margin-bottom:12px}
+    .hotel-channel-add input{height:44px;border:1px solid var(--line);border-radius:14px;padding:0 12px;outline:none;font-weight:800;background:#fff}
     .toast{position:fixed;right:22px;bottom:22px;background:#111827;color:#fff;padding:13px 15px;border-radius:14px;box-shadow:var(--shadow);display:none;z-index:60;font-weight:850}
     .toast.show{display:block;animation:fadeToast 2.2s ease forwards}
 
@@ -405,16 +412,9 @@
         <div class="employee-list" id="employeeList"></div>
       </div>
       <div class="form-section" style="margin-top:16px">
-        <h3>Канали</h3>
-        <div class="settings-grid">
-          <div>
-            <label class="label">Добави канал</label>
-            <input id="channelInput" placeholder="Име на канал">
-          </div>
-          <button class="btn primary" id="addChannelBtn" type="button">Добави</button>
-        </div>
-        <div class="employee-list" id="channelList"></div>
-        <div class="hint">При преименуване на канал името се обновява и в старите записи.</div>
+        <h3>Канали по хотели</h3>
+        <div class="hint" style="margin-bottom:12px">Всеки хотел има собствен списък с канали за нови проверки.</div>
+        <div class="hotel-channel-settings" id="hotelChannelList"></div>
       </div>
     </div>
   </div>
@@ -425,6 +425,7 @@
 <script>
 (function(){
   const HOTELS = ['Алгара Бийч','Гранд Виктория','Свети Мина','Вила Азура','Малина Резидънс'];
+  const DEFAULT_CHANNELS = ['Booking','Quendoo','TO'];
   const MONTHS = ['Януари','Февруари','Март','Април','Май','Юни','Юли','Август','Септември','Октомври','Ноември','Декември'];
   const DOW = ['П','В','С','Ч','П','С','Н'];
   const dataEl = document.getElementById('app-data');
@@ -441,7 +442,7 @@
   let loginInProgress = false;
   let lastRemotePayload = '';
   let data = safeData();
-  if (!data.channels.length) data.channels = ['Booking','Quendoo','TO'];
+  ensureHotelChannels();
   let selectedDate = todayBg();
   if (data.records.length) selectedDate = latestRecordDate();
   let draft = {
@@ -449,7 +450,7 @@
     periodStart: '',
     periodEnd: '',
     hotel: HOTELS[0],
-    channels: data.channels.length ? [data.channels[0]] : [],
+    channels: channelsForHotel(HOTELS[0]).length ? [channelsForHotel(HOTELS[0])[0]] : [],
     result: 'ok',
     finding: '',
     employee: data.employees[0] || ''
@@ -484,8 +485,7 @@
     hotelModalBody: document.getElementById('hotelModalBody'),
     employeeList: document.getElementById('employeeList'),
     employeeInput: document.getElementById('employeeInput'),
-    channelList: document.getElementById('channelList'),
-    channelInput: document.getElementById('channelInput'),
+    hotelChannelList: document.getElementById('hotelChannelList'),
     toast: document.getElementById('toast'),
     syncStatus: document.getElementById('syncStatus'),
     googleScriptUrlInput: document.getElementById('googleScriptUrlInput'),
@@ -526,9 +526,7 @@
   });
   document.getElementById('clearPeriodBtn').addEventListener('click', () => { tempPeriodStart = null; tempPeriodEnd = null; renderPeriodCalendars(); });
   document.getElementById('addEmployeeBtn').addEventListener('click', addEmployee);
-  document.getElementById('addChannelBtn').addEventListener('click', addChannel);
   els.employeeInput.addEventListener('keydown', e => { if (e.key === 'Enter') addEmployee(); });
-  els.channelInput.addEventListener('keydown', e => { if (e.key === 'Enter') addChannel(); });
   els.employeeSelect.addEventListener('change', () => { draft.employee = els.employeeSelect.value; renderDraftBadge(); });
   els.findingInput.addEventListener('input', () => { draft.finding = els.findingInput.value; renderDraftBadge(); });
   els.addRecordBtn.addEventListener('click', addRecord);
@@ -599,9 +597,9 @@
 
       // Подготвяме празен екран само като резервен вариант, ако Google Drive не отговори.
       data = normalizeData({});
-      data.channels = ['Booking','Quendoo','TO'];
+      ensureHotelChannels();
       selectedDate = todayBg();
-      draft = { checkDate:selectedDate, periodStart:'', periodEnd:'', hotel:HOTELS[0], channels:data.channels.length ? [data.channels[0]] : [], result:'ok', finding:'', employee:'' };
+      draft = { checkDate:selectedDate, periodStart:'', periodEnd:'', hotel:HOTELS[0], channels:channelsForHotel(HOTELS[0]).length ? [channelsForHotel(HOTELS[0])[0]] : [], result:'ok', finding:'', employee:'' };
       singleCalendarMonth = startOfMonth(parseBgDate(selectedDate));
       periodBaseMonth = startOfMonth(parseBgDate(selectedDate));
       lastRemotePayload = JSON.stringify(data);
@@ -650,6 +648,14 @@
     } catch(e) { return {employees:[],channels:[],records:[]}; }
   }
   function normalizeData(parsed){
+    const legacyChannels = normalizeNameList(Array.isArray(parsed.channels) && parsed.channels.length ? parsed.channels : DEFAULT_CHANNELS);
+    const sourceHotelChannels = parsed && parsed.hotelChannels && typeof parsed.hotelChannels === 'object' ? parsed.hotelChannels : {};
+    const hotelChannels = {};
+    HOTELS.forEach(hotel => {
+      const list = Array.isArray(sourceHotelChannels[hotel]) ? sourceHotelChannels[hotel] : legacyChannels;
+      hotelChannels[hotel] = normalizeNameList(list);
+      if (!hotelChannels[hotel].length) hotelChannels[hotel] = DEFAULT_CHANNELS.slice();
+    });
     const records = Array.isArray(parsed.records) ? parsed.records.map(r => ({
       ...r,
       id: r && r.id ? r.id : makeId(),
@@ -659,9 +665,47 @@
     })) : [];
     return {
       employees: Array.isArray(parsed.employees) ? parsed.employees : [],
-      channels: Array.isArray(parsed.channels) ? parsed.channels : [],
+      channels: legacyChannels.length ? legacyChannels : DEFAULT_CHANNELS.slice(),
+      hotelChannels,
       records
     };
+  }
+  function normalizeNameList(list){
+    return Array.from(new Set((list || []).map(v => String(v || '').trim()).filter(Boolean)));
+  }
+  function syncLegacyChannels(){
+    const all = [];
+    HOTELS.forEach(hotel => channelsForHotel(hotel).forEach(ch => all.push(ch)));
+    data.channels = normalizeNameList(all);
+    if (!data.channels.length) data.channels = DEFAULT_CHANNELS.slice();
+  }
+  function ensureHotelChannels(){
+    if (!data.hotelChannels || typeof data.hotelChannels !== 'object') data.hotelChannels = {};
+    HOTELS.forEach(hotel => {
+      if (!Array.isArray(data.hotelChannels[hotel]) || !data.hotelChannels[hotel].length) {
+        data.hotelChannels[hotel] = normalizeNameList(data.channels && data.channels.length ? data.channels : DEFAULT_CHANNELS);
+      } else {
+        data.hotelChannels[hotel] = normalizeNameList(data.hotelChannels[hotel]);
+      }
+      if (!data.hotelChannels[hotel].length) data.hotelChannels[hotel] = DEFAULT_CHANNELS.slice();
+    });
+    syncLegacyChannels();
+  }
+  function channelsForHotel(hotel){
+    if (!data.hotelChannels || !Array.isArray(data.hotelChannels[hotel])) return DEFAULT_CHANNELS.slice();
+    return data.hotelChannels[hotel];
+  }
+  function setHotelChannels(hotel, channels){
+    if (!data.hotelChannels || typeof data.hotelChannels !== 'object') data.hotelChannels = {};
+    data.hotelChannels[hotel] = normalizeNameList(channels);
+    if (!data.hotelChannels[hotel].length) data.hotelChannels[hotel] = DEFAULT_CHANNELS.slice();
+    syncLegacyChannels();
+  }
+  function ensureChannelForHotel(hotel, channel){
+    const clean = String(channel || '').trim();
+    if (!hotel || !clean) return;
+    const list = channelsForHotel(hotel);
+    if (!list.includes(clean)) setHotelChannels(hotel, [...list, clean]);
   }
   function getRememberedLogin(){
     try {
@@ -765,10 +809,10 @@
       if (!payload || payload.ok === false) throw new Error(payload && payload.error ? payload.error : 'Няма валиден отговор от скрипта.');
       const incoming = payload.data || payload;
       data = normalizeData(incoming);
-      if (!data.channels.length) data.channels = ['Booking','Quendoo','TO'];
+      ensureHotelChannels();
       lastRemotePayload = JSON.stringify(data);
       selectedDate = data.records.length ? latestRecordDate() : todayBg();
-      draft = { checkDate:selectedDate, periodStart:'', periodEnd:'', hotel:HOTELS[0], channels:data.channels.length ? [data.channels[0]] : [], result:'ok', finding:'', employee:data.employees[0] || '' };
+      draft = { checkDate:selectedDate, periodStart:'', periodEnd:'', hotel:HOTELS[0], channels:channelsForHotel(HOTELS[0]).length ? [channelsForHotel(HOTELS[0])[0]] : [], result:'ok', finding:'', employee:data.employees[0] || '' };
       singleCalendarMonth = startOfMonth(parseBgDate(selectedDate));
       periodBaseMonth = startOfMonth(parseBgDate(selectedDate));
       renderAll();
@@ -852,7 +896,7 @@
   function makeId(){ return 'rec-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8); }
   function normalizeChannelList(list){
     const clean = Array.from(new Set((list || []).map(v => String(v || '').trim()).filter(Boolean)));
-    return clean.filter(ch => data.channels.includes(ch));
+    return clean.filter(ch => channelsForHotel(draft.hotel).includes(ch));
   }
   function getDraftChannels(){
     if (Array.isArray(draft.channels)) return normalizeChannelList(draft.channels);
@@ -860,8 +904,9 @@
     return [];
   }
   function getSelectedChannelsFromUi(){
+    const hotelChannels = channelsForHotel(draft.hotel);
     const selected = Array.from(els.channelChoices.querySelectorAll('[data-channel-index].active'))
-      .map(btn => data.channels[Number(btn.dataset.channelIndex)])
+      .map(btn => hotelChannels[Number(btn.dataset.channelIndex)])
       .filter(Boolean);
     return normalizeChannelList(selected.length ? selected : getDraftChannels());
   }
@@ -886,18 +931,19 @@
       if (!data.employees.includes(draft.employee)) draft.employee = data.employees[0];
     }
     els.employeeSelect.value = draft.employee;
+    const hotelChannels = channelsForHotel(draft.hotel);
     draft.channels = getDraftChannels();
-    if (!draft.channels.length && data.channels.length) draft.channels = [data.channels[0]];
-    draft.channels = draft.channels.filter(ch => data.channels.includes(ch));
-    if (!draft.channels.length && data.channels.length) draft.channels = [data.channels[0]];
+    if (!draft.channels.length && hotelChannels.length) draft.channels = [hotelChannels[0]];
+    draft.channels = draft.channels.filter(ch => hotelChannels.includes(ch));
+    if (!draft.channels.length && hotelChannels.length) draft.channels = [hotelChannels[0]];
     els.hotelChoices.innerHTML = HOTELS.map(h => `<button type="button" class="choice ${draft.hotel===h?'active':''}" data-hotel="${escapeHtml(h)}">${escapeHtml(h)}</button>`).join('');
-    els.channelChoices.innerHTML = data.channels.map((c, idx) => {
+    els.channelChoices.innerHTML = hotelChannels.map((c, idx) => {
       const active = draft.channels.includes(c);
       return `<button type="button" class="choice channel-choice ${active?'active':''}" aria-pressed="${active?'true':'false'}" data-channel-index="${idx}"><span class="tick">✓</span><span>${escapeHtml(c)}</span></button>`;
     }).join('');
     document.querySelectorAll('[data-hotel]').forEach(b => b.addEventListener('click', () => { draft.hotel = b.dataset.hotel; renderDraft(); }));
     els.channelChoices.querySelectorAll('[data-channel-index]').forEach(b => b.addEventListener('click', () => {
-      const ch = data.channels[Number(b.dataset.channelIndex)];
+      const ch = channelsForHotel(draft.hotel)[Number(b.dataset.channelIndex)];
       if (!ch) return;
       const current = new Set(getDraftChannels());
       if (editingRecordId) {
@@ -948,18 +994,19 @@
     const dayRecords = recordsForDate(selectedDate);
     const ok = dayRecords.filter(r=>r.result==='ok').length;
     const diff = dayRecords.filter(r=>r.result==='diff').length;
-    const totalSlots = HOTELS.length * data.channels.length;
-    const filledSlots = new Set(dayRecords.map(r=>r.hotel+'|'+r.channel)).size;
+    const totalSlots = HOTELS.reduce((sum, hotel) => sum + channelsForHotel(hotel).length, 0);
+    const filledSlots = new Set(dayRecords.filter(r=>channelsForHotel(r.hotel).includes(r.channel)).map(r=>r.hotel+'|'+r.channel)).size;
     els.summaryStrip.innerHTML = `<span class="metric">${dayRecords.length} записа</span><span class="metric ok">${ok} OK</span><span class="metric diff">${diff} с разлики</span><span class="metric">${totalSlots-filledSlots} без запис</span>`;
     els.hotelGrid.innerHTML = HOTELS.map(hotel => {
-      const statuses = data.channels.map(ch => getLatestRecord(selectedDate, hotel, ch));
+      const hotelChannels = channelsForHotel(hotel);
+      const statuses = hotelChannels.map(ch => getLatestRecord(selectedDate, hotel, ch));
       const hasDiff = statuses.some(r=>r && r.result === 'diff');
       const filled = statuses.filter(Boolean).length;
-      const allOk = filled === data.channels.length && statuses.every(r=>r.result==='ok');
+      const allOk = filled === hotelChannels.length && statuses.every(r=>r.result==='ok');
       const cls = hasDiff ? 'has-diff' : allOk ? 'all-ok' : filled ? 'partial' : '';
       const pillCls = hasDiff ? 'diff' : allOk ? 'ok' : '';
-      const pillText = hasDiff ? 'Има разлики' : allOk ? 'Всичко OK' : filled ? `${filled}/${data.channels.length} канала` : 'Няма записи';
-      const rows = data.channels.map((ch,i) => {
+      const pillText = hasDiff ? 'Има разлики' : allOk ? 'Всичко OK' : filled ? `${filled}/${hotelChannels.length} канала` : 'Няма записи';
+      const rows = hotelChannels.map((ch,i) => {
         const r = statuses[i];
         const chip = r ? (r.result === 'ok' ? '<span class="status-chip ok">✅ OK</span>' : '<span class="status-chip diff">⚠️ Има разлики</span>') : '<span class="status-chip none">— Няма запис</span>';
         const employee = r && r.employee ? `<span class="channel-employee">${escapeHtml(r.employee)}</span>` : '';
@@ -1080,7 +1127,7 @@
   }
   function resetDraft(){
     editingRecordId = null;
-    draft = { checkDate: selectedDate, periodStart:'', periodEnd:'', hotel:HOTELS[0], channels:data.channels.length ? [data.channels[0]] : [], result:'ok', finding:'', employee:data.employees[0]||'' };
+    draft = { checkDate: selectedDate, periodStart:'', periodEnd:'', hotel:HOTELS[0], channels:channelsForHotel(HOTELS[0]).length ? [channelsForHotel(HOTELS[0])[0]] : [], result:'ok', finding:'', employee:data.employees[0]||'' };
     renderDraft();
   }
   function openHotel(hotel){
@@ -1105,7 +1152,7 @@
   function editRecord(id){
     const record = data.records.find(r => r.id === id);
     if (!record) { alert('Записът не е намерен.'); return; }
-    if (record.channel && !data.channels.includes(record.channel)) data.channels.push(record.channel);
+    if (record.channel) ensureChannelForHotel(record.hotel || HOTELS[0], record.channel);
     if (record.employee && !data.employees.includes(record.employee)) data.employees.push(record.employee);
     editingRecordId = id;
     draft = {
@@ -1113,7 +1160,7 @@
       periodStart: record.periodStart || '',
       periodEnd: record.periodEnd || '',
       hotel: record.hotel || HOTELS[0],
-      channels: record.channel ? [record.channel] : (data.channels.length ? [data.channels[0]] : []),
+      channels: record.channel ? [record.channel] : (channelsForHotel(record.hotel || HOTELS[0]).length ? [channelsForHotel(record.hotel || HOTELS[0])[0]] : []),
       result: record.result || 'ok',
       finding: record.finding || '',
       employee: record.employee || data.employees[0] || ''
@@ -1151,9 +1198,22 @@
       renderSettings(); renderDraft();
     }));
 
-    els.channelList.innerHTML = data.channels.length ? data.channels.map(name => `<span class="employee-token">${escapeHtml(name)} <button title="Промени" type="button" data-edit-channel="${escapeHtml(name)}">✎</button><button title="Премахни" type="button" data-remove-channel="${escapeHtml(name)}">×</button></span>`).join('') : '<div class="empty-state">Няма добавени канали.</div>';
-    els.channelList.querySelectorAll('[data-edit-channel]').forEach(btn => btn.addEventListener('click', () => renameChannel(btn.dataset.editChannel)));
-    els.channelList.querySelectorAll('[data-remove-channel]').forEach(btn => btn.addEventListener('click', () => removeChannel(btn.dataset.removeChannel)));
+    els.hotelChannelList.innerHTML = HOTELS.map(hotel => {
+      const channels = channelsForHotel(hotel);
+      const tokens = channels.length ? channels.map(name => `<span class="employee-token">${escapeHtml(name)} <button title="Промени" type="button" data-hotel="${escapeHtml(hotel)}" data-edit-channel="${escapeHtml(name)}">✎</button><button title="Премахни" type="button" data-hotel="${escapeHtml(hotel)}" data-remove-channel="${escapeHtml(name)}">×</button></span>`).join('') : '<div class="empty-state">Няма добавени канали.</div>';
+      return `<div class="hotel-channel-card">
+        <div class="hotel-channel-head"><strong>${escapeHtml(hotel)}</strong><span>${channels.length} канала</span></div>
+        <div class="hotel-channel-add">
+          <input data-channel-input="${escapeHtml(hotel)}" placeholder="Нов канал за ${escapeHtml(hotel)}">
+          <button class="btn primary" type="button" data-add-channel="${escapeHtml(hotel)}">Добави</button>
+        </div>
+        <div class="employee-list">${tokens}</div>
+      </div>`;
+    }).join('');
+    els.hotelChannelList.querySelectorAll('[data-add-channel]').forEach(btn => btn.addEventListener('click', () => addHotelChannel(btn.dataset.addChannel)));
+    els.hotelChannelList.querySelectorAll('[data-channel-input]').forEach(input => input.addEventListener('keydown', e => { if (e.key === 'Enter') addHotelChannel(input.dataset.channelInput); }));
+    els.hotelChannelList.querySelectorAll('[data-edit-channel]').forEach(btn => btn.addEventListener('click', () => renameHotelChannel(btn.dataset.hotel, btn.dataset.editChannel)));
+    els.hotelChannelList.querySelectorAll('[data-remove-channel]').forEach(btn => btn.addEventListener('click', () => removeHotelChannel(btn.dataset.hotel, btn.dataset.removeChannel)));
   }
   function addEmployee(){
     const name = els.employeeInput.value.trim();
@@ -1176,33 +1236,44 @@
     persistData();
     renderSettings(); renderAll();
   }
-  function addChannel(){
-    const name = els.channelInput.value.trim();
+  function getHotelChannelInput(hotel){
+    return Array.from(els.hotelChannelList.querySelectorAll('[data-channel-input]')).find(input => input.dataset.channelInput === hotel);
+  }
+  function addHotelChannel(hotel){
+    const input = getHotelChannelInput(hotel);
+    const name = input ? input.value.trim() : '';
     if (!name) return;
-    if (!data.channels.includes(name)) data.channels.push(name);
-    els.channelInput.value = '';
-    if (!getDraftChannels().length) draft.channels = [name];
+    const channels = channelsForHotel(hotel);
+    if (!channels.includes(name)) setHotelChannels(hotel, [...channels, name]);
+    if (input) input.value = '';
+    if (draft.hotel === hotel && !getDraftChannels().length) draft.channels = [name];
     persistData();
     renderSettings(); renderAll();
   }
-  function renameChannel(oldName){
+  function renameHotelChannel(hotel, oldName){
     const newName = prompt('Ново име на канал:', oldName);
     if (newName === null) return;
     const clean = newName.trim();
     if (!clean || clean === oldName) return;
-    if (data.channels.includes(clean)) { alert('Вече има канал с това име.'); return; }
-    data.channels = data.channels.map(c => c === oldName ? clean : c);
-    data.records.forEach(r => { if (r.channel === oldName) r.channel = clean; });
-    draft.channels = getDraftChannels().map(c => c === oldName ? clean : c);
+    const channels = channelsForHotel(hotel);
+    if (channels.includes(clean)) { alert('Вече има канал с това име за този хотел.'); return; }
+    if (draft.hotel === hotel) {
+      draft.channels = (Array.isArray(draft.channels) ? draft.channels : []).map(c => c === oldName ? clean : c);
+    }
+    setHotelChannels(hotel, channels.map(c => c === oldName ? clean : c));
+    data.records.forEach(r => { if (r.hotel === hotel && r.channel === oldName) r.channel = clean; });
     persistData();
     renderSettings(); renderAll();
   }
-  function removeChannel(name){
-    if (data.channels.length <= 1) { alert('Трябва да остане поне един канал.'); return; }
-    if (!confirm(`Да премахна ли канал „${name}“? Старите записи с този канал ще останат в историята, но каналът няма да е активен за нови проверки.`)) return;
-    data.channels = data.channels.filter(c => c !== name);
-    draft.channels = getDraftChannels().filter(c => c !== name);
-    if (!draft.channels.length && data.channels.length) draft.channels = [data.channels[0]];
+  function removeHotelChannel(hotel, name){
+    const channels = channelsForHotel(hotel);
+    if (channels.length <= 1) { alert('Трябва да остане поне един канал за този хотел.'); return; }
+    if (!confirm(`Да премахна ли канал „${name}“ за ${hotel}? Старите записи с този канал ще останат в историята, но каналът няма да е активен за нови проверки.`)) return;
+    setHotelChannels(hotel, channels.filter(c => c !== name));
+    if (draft.hotel === hotel) {
+      draft.channels = getDraftChannels().filter(c => c !== name);
+      if (!draft.channels.length && channelsForHotel(hotel).length) draft.channels = [channelsForHotel(hotel)[0]];
+    }
     persistData();
     renderSettings(); renderAll();
   }
