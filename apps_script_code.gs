@@ -26,6 +26,8 @@ const FOLDER_NAME = 'ResCheck';
 const FILE_NAME = 'reservation_checks_drive_data.json';
 const BACKUP_PREFIX = 'reservation_checks_drive_data_Backup_';
 const BACKUP_LIMIT = 5;
+const HOTEL_NAMES = ['Алгара Бийч','Гранд Виктория','Свети Мина','Вила Азура','Малина Резидънс'];
+const DEFAULT_CHANNELS = ['Booking', 'Quendoo', 'TO'];
 const FOLDER_ID_PROPERTY = 'RESCHECK_FOLDER_ID';
 const USERNAME_PROPERTY = 'RESCHECK_USERNAME';
 const PASSWORD_PROPERTY = 'RESCHECK_PASSWORD';
@@ -374,17 +376,33 @@ function makeBackupName_(suffix) {
 }
 
 function normalizeData_(data) {
+  const channels = Array.isArray(data.channels) && data.channels.length ? data.channels.map(String) : DEFAULT_CHANNELS.slice();
+  const sourceHotelChannels = data && data.hotelChannels && typeof data.hotelChannels === 'object' ? data.hotelChannels : {};
+  const hotelChannels = {};
+  HOTEL_NAMES.forEach(function(hotel) {
+    const source = Array.isArray(sourceHotelChannels[hotel]) && sourceHotelChannels[hotel].length ? sourceHotelChannels[hotel] : channels;
+    hotelChannels[hotel] = source.map(String).map(function(v) { return v.trim(); }).filter(Boolean);
+    if (!hotelChannels[hotel].length) hotelChannels[hotel] = DEFAULT_CHANNELS.slice();
+  });
+
   return {
     employees: Array.isArray(data.employees) ? data.employees.map(String) : [],
-    channels: Array.isArray(data.channels) && data.channels.length ? data.channels.map(String) : ['Booking', 'Quendoo', 'TO'],
+    channels: channels,
+    hotelChannels: hotelChannels,
     records: Array.isArray(data.records) ? data.records : []
   };
 }
 
 function defaultData_() {
+  const hotelChannels = {};
+  HOTEL_NAMES.forEach(function(hotel) {
+    hotelChannels[hotel] = DEFAULT_CHANNELS.slice();
+  });
+
   return {
     employees: [],
-    channels: ['Booking', 'Quendoo', 'TO'],
+    channels: DEFAULT_CHANNELS.slice(),
+    hotelChannels: hotelChannels,
     records: []
   };
 }
